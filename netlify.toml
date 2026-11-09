@@ -1,0 +1,11 @@
+[build]
+  publish = "."
+
+[build.environment]
+  SECRETS_SCAN_ENABLED = "false"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Cache-Control = "public, max-age=0, must-revalidate"

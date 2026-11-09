@@ -1,0 +1,13 @@
+# Environment Variables & Private Secrets
+.env
+.env.local
+.env.*.local
+env-config.js
+
+# Deployment & Local State
+.netlify
+.netlify/
+node_modules/
+.DS_Store
+dist/
+*.log

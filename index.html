@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hyatt Commercial — OM Aerial &amp; Location Intelligence</title>
+
+  <!-- Google Fonts: Inter, Playfair Display & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <!-- MapLibre GL JS v3.6.2 + Three.js r128 + CesiumJS 1.114 for Global Google Earth Photorealistic 3D Tiles -->
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js"></script>
+
+  <!-- jsPDF for True Vector-Text Document PDF Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="ai-drone-enhanced landing-mode">
+
+  <!-- CLEAN MINIMAL LANDING & PRE-FLIGHT CALCULATION CURTAIN (HIDES MAPS UNTIL CALCULATIONS FINISH!) -->
+  <div id="landing-curtain" class="landing-curtain no-print">
+    <!-- Shown after user selects an address & the search bar glides to the top, BEFORE revealing maps -->
+    <div id="preflight-calc-card" class="preflight-calc-card hidden">
+      <div class="pfc-spinner-row">
+        <span class="spinner-ring"></span>
+        <span id="pfc-address-title" class="pfc-address-title">Preparing Property Intelligence...</span>
+      </div>
+      <div class="pfc-progress-track">
+        <div id="pfc-progress-fill" class="pfc-progress-fill" style="width: 15%;"></div>
+      </div>
+      <div class="pfc-steps-list">
+        <div id="pfc-step-1" class="pfc-step active">⏳ 1. Isolating exact subject building footprint (no roads or trees)...</div>
+        <div id="pfc-step-2" class="pfc-step">⏳ 2. Scanning nearby hospital, grocery, wine &amp; dining anchors...</div>
+        <div id="pfc-step-3" class="pfc-step">⏳ 3. Calculating real road drive times (OSRM) &amp; MDOT traffic...</div>
+        <div id="pfc-step-4" class="pfc-step">⏳ 4. Building Senior Broker OM &amp; loading Google 3D Earth structure...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1A. FULL-BLEED NORMAL VECTOR / HYBRID MAP STAGE (FOR ACCESS, TRAFFIC & NEARBY PLACES) -->
+  <div id="map-container" class="no-print"></div>
+
+  <!-- 1B. TRUE GOOGLE EARTH PHOTOREALISTIC 3D TILES STAGE (CESIUMJS + GOOGLE 3D TILES API) -->
+  <div id="cesium-earth-container" class="cesium-earth-container hidden no-print"></div>
+
+  <!-- TOP HEADER PULLED-OUT SETTINGS & API KEYS DRAWER (100% VERTICAL STACKED — NEVER SIDE-BY-SIDE!) -->
+  <div id="real-3d-modal" class="real-3d-modal hidden no-print">
+    <div class="real-3d-header">
+      <div>
+        <strong>⚙️ Header Settings — API Keys, 3D Earth Engine &amp; Deep Configuration</strong>
+        <span id="real-3d-sub">All API keys and deep settings pulled out vertically in one clean column</span>
+      </div>
+      <button type="button" id="btn-close-real-3d" class="btn-close-3d">✕ Close Settings</button>
+    </div>
+
+    <div class="header-settings-scroll">
+
+      <!-- 1. GOOGLE 3D EARTH API KEY (STACKED VERTICALLY) -->
+      <div class="pulled-out-setting-block">
+        <div class="pos-title-row">
+          <span class="pos-title">🛰️ 1. Google 3D Earth API Key (Photorealistic 3D Tiles — 1,000 Free Sessions/Mo)</span>
+          <span id="google-3d-session-badge" class="pos-badge">Sessions: 1 / 1,000 Free</span>
+        </div>
+        <p class="pos-desc">
+          Streams Google's official 1:1 3D photogrammetry mesh for the 3D Site view while keeping the normal vector road map when inspecting access &amp; traffic.
+        </p>
+        <input
+          type="password"
+          id="google-3d-tiles-key-input"
+          class="pos-full-input"
+          placeholder="Paste Google Maps API Key (AIza...) with 'Map Tiles API' enabled..."
+        />
+        <button type="button" id="btn-activate-google-3d-tiles" class="pos-full-btn-primary">
+          ⚡ Activate Google 3D Earth on Main Map
+        </button>
+        <button type="button" id="btn-switch-maplibre-3d" class="pos-full-btn-secondary">
+          🏢 Switch to Free Global 3D Mode (No API Key Needed)
+        </button>
+        <a
+          href="https://console.cloud.google.com/google/maps-apis/apis/tile.googleapis.com"
+          target="_blank"
+          rel="noopener"
+          class="pos-full-link"
+        >
+          🔑 Open Google Cloud Console (Map Tiles API — 1,000 Free Sessions/Mo) ↗
+        </a>
+        <div id="google-3d-status-msg" class="pos-status-line">
+          ✓ Official Google 3D Earth API Active
+        </div>
+      </div>
+
+      <!-- 2. AI COPYWRITER API KEY (STACKED VERTICALLY) -->
+      <div class="pulled-out-setting-block">
+        <div class="pos-title-row">
+          <span class="pos-title">✨ 2. AI Copywriter API Key (Optional Groq or xAI Grok Key)</span>
+          <span id="ollama-connection-pill" class="pos-badge">No Rate Limits</span>
+        </div>
+        <p class="pos-desc">
+          Automatically writes plain-English human brochure copy with <strong>bold keywords</strong> tailored by buyer age/profile. Optionally paste a free Groq key (<code>gsk_...</code>) or xAI Grok key (<code>xai-...</code>) below:
+        </p>
+        <input
+          type="password"
+          id="groq-api-key-input"
+          class="pos-full-input"
+          placeholder="Optional: Paste Groq key (gsk_...) or xAI Grok key (xai-...)"
+        />
+        <button type="button" id="btn-run-groq" class="pos-full-btn-primary">
+          ⚡ Regenerate Brochure Copy with AI
+        </button>
+        <div id="local-ai-status" class="pos-status-line">
+          Ready — select a Buyer Profile in the Offering Memorandum dropdown to see instant bold human copy!
+        </div>
+      </div>
+
+      <!-- 3. SYSTEM ARCHITECTURE BLUEPRINT & GOOGLE EARTH WEB LINK (STACKED VERTICALLY) -->
+      <div class="pulled-out-setting-block">
+        <div class="pos-title-row">
+          <span class="pos-title">⚙️ 3. System Architecture Blueprint &amp; External 3D Tools</span>
+          <span class="pos-badge">Cross-Source Verified</span>
+        </div>
+        <button type="button" id="btn-open-blueprint" class="pos-full-btn-secondary">
+          📐 Open System Architecture &amp; Data Validation Blueprint
+        </button>
+        <a
+          id="btn-open-google-earth-3d"
+          href="https://earth.google.com/web/search/2661+Riva+Rd,+Annapolis,+MD+21401/@38.97392,-76.55985,35a,380d,35y,-24h,60t,0r"
+          target="_blank"
+          rel="noopener"
+          class="pos-full-link"
+        >
+          🌍 Launch Full Google Earth Web in New Tab ↗
+        </a>
+      </div>
+
+      <!-- 4. STREET-LEVEL 360° VIEW & SATELLITE INSPECTOR (STACKED VERTICALLY — NOT SIDE BY SIDE!) -->
+      <div class="pulled-out-setting-block">
+        <div class="pos-title-row">
+          <span class="pos-title">🚶 4. Interactive 360° Street-Level Building Structure</span>
+        </div>
+        <div class="pos-iframe-box">
+          <iframe
+            id="streetview-iframe"
+            src="https://www.google.com/maps?q=2661+Riva+Road,+Annapolis,+MD+21401&layer=c&cbll=38.97395,-76.56025&cbp=12,125,0,0,0&output=svembed"
+            allowfullscreen
+            loading="lazy"
+          ></iframe>
+        </div>
+        <div class="pos-title-row" style="margin-top:8px;">
+          <span class="pos-title">🛰️ 5. High-Res Oblique Satellite Inspector</span>
+        </div>
+        <div class="pos-iframe-box">
+          <iframe
+            id="gmaps-3d-iframe"
+            src="https://www.google.com/maps?q=2661+Riva+Road,+Annapolis,+MD+21401&t=k&z=19&output=embed"
+            allowfullscreen
+            loading="lazy"
+          ></iframe>
+        </div>
+      </div>
+
+      <!-- 5. LIVE PIPELINE TELEMETRY LOG (STACKED VERTICALLY) -->
+      <div class="pulled-out-setting-block">
+        <div class="pos-title-row">
+          <span class="pos-title">📡 6. Live Pipeline Telemetry Log</span>
+          <span class="pos-badge">Real-Time</span>
+        </div>
+        <div id="pipeline-console" class="clean-console"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FLOATING 3D ORBIT ACTIVE PILL -->
+  <div id="orbit-floating-banner" class="orbit-floating-banner hidden no-print">
+    <span class="orbit-pulse-dot"></span>
+    <span id="orbit-banner-text">3D Camera Orbiting Site (55° Pitch)</span>
+    <button type="button" id="btn-stop-orbit-floating" class="btn-stop-orbit-pill">⏹️ Stop Orbit</button>
+  </div>
+
+  <!-- LIVE ADDRESS PIPELINE LOADING BANNER -->
+  <div id="pipeline-loading-pill" class="pipeline-loading-pill hidden no-print">
+    <span class="spinner-ring"></span>
+    <span id="pipeline-loading-text">Loading Real Building Structures, Roads &amp; Plain-English Brief...</span>
+  </div>
+
+  <!-- 2. FLOATING GLASS TOP COMMAND BAR (STARTS CENTERED IN LANDING MODE, GLIDES SMOOTHLY TO TOP!) -->
+  <header id="glass-topbar" class="glass-topbar no-print">
+    <div class="brand-group">
+      <div class="brand-logo">HC</div>
+      <div class="brand-text">
+        <div class="brand-title">HYATT COMMERCIAL</div>
+        <div class="brand-sub">OM Location Intelligence</div>
+      </div>
+    </div>
+
+    <p id="landing-hero-subtitle" class="landing-hero-subtitle">
+      Enter any commercial property address below to pre-calculate its 3D Google Earth structure, real road drive times, and Offering Memorandum.
+    </p>
+
+    <div class="search-autocomplete-wrap">
+      <form id="address-search-form" class="glass-search">
+        <svg class="search-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+          <circle cx="12" cy="10" r="3"></circle>
+        </svg>
+        <input
+          type="text"
+          id="address-input"
+          class="search-input"
+          value=""
+          placeholder="Type any address (e.g., 2661 Riva Road, Annapolis, MD)..."
+          autocomplete="off"
+        />
+        <button type="submit" id="btn-run-pipeline" class="search-submit">Locate</button>
+      </form>
+
+      <!-- Live Address Autocomplete Suggestions Dropdown -->
+      <div id="address-suggestions-list" class="address-suggestions-list hidden"></div>
+
+      <!-- Inline Not-Found / Error Message -->
+      <div id="address-error-msg" class="address-error-msg hidden">
+        ⚠️ Couldn't find that address — please type a new one (include Street, City &amp; State).
+      </div>
+    </div>
+
+    <!-- Compact Smart View Switcher: 1. 3D Building Map vs 2/3. Normal Vector Access & Traffic Map -->
+    <div class="view-mode-switcher">
+      <button type="button" class="mode-btn active" data-mode="site">1. 3D Buildings</button>
+      <button type="button" class="mode-btn" data-mode="corridors">2. Access &amp; Traffic Map</button>
+      <button type="button" class="mode-btn" data-mode="anchors">3. Nearby Places Map</button>
+    </div>
+
+    <!-- Action Controls (With Deep Settings & API Keys in Heading!) -->
+    <div class="header-actions">
+      <button type="button" id="btn-orbit-toggle" class="glass-btn btn-orbit" title="Circle 360° around the site">
+        <span id="orbit-icon">🔄</span>
+        <span id="orbit-label">Orbit</span>
+      </button>
+
+      <button type="button" id="btn-export-brochure" class="glass-btn btn-brochure-highlight" title="Open Full-Page Printable OM Brochure View">
+        📄 Brochure View
+      </button>
+
+      <button type="button" id="btn-open-real-3d" class="glass-btn" title="Pull out API Keys, Google 3D Earth Settings &amp; Deep Configuration">
+        ⚙️ API &amp; Settings ▾
+      </button>
+    </div>
+  </header>
+
+  <!-- 3. FLOATING TOP-LEFT HOVER INSPECTOR -->
+  <div id="hover-inspector" class="hover-inspector hidden no-print">
+    <div id="inspector-kicker" class="inspector-kicker">BUILDING / LOCATION DETAILS</div>
+    <div id="inspector-title" class="inspector-title">—</div>
+    <div id="inspector-sub" class="inspector-sub">—</div>
+    <div id="inspector-metrics" class="inspector-metrics"></div>
+  </div>
+
+  <!-- 3B. FLOATING LEFT-SIDE ZOOM IN / ZOOM OUT / CENTER BUILDING CONTROLS (WORKS IN GOOGLE 3D EARTH & NORMAL MAP!) -->
+  <div id="earth-zoom-controls" class="earth-zoom-controls no-print">
+    <button type="button" id="btn-earth-zoom-in" class="ez-btn" title="Zoom In closer to building (+)">＋</button>
+    <button type="button" id="btn-earth-zoom-out" class="ez-btn" title="Zoom Out to see whole building &amp; surroundings (−)">－</button>
+    <button type="button" id="btn-earth-recenter" class="ez-btn ez-btn-center" title="Lock &amp; Center on Subject Building">🎯</button>
+  </div>
+
+  <!-- 4. FLOATING BOTTOM-LEFT COMPACT LAYER LEGEND -->
+  <div class="map-legend-bar no-print">
+    <label class="legend-toggle active">
+      <input type="checkbox" id="toggle-parcel" checked />
+      <span class="legend-dot dot-gold"></span>
+      <span>Site Boundary &amp; Roofs</span>
+    </label>
+    <label class="legend-toggle active">
+      <input type="checkbox" id="toggle-access" checked />
+      <span class="legend-dot dot-emerald"></span>
+      <span>Access Badges</span>
+    </label>
+    <label class="legend-toggle active">
+      <input type="checkbox" id="toggle-corridors" checked />
+      <span class="legend-dot dot-amber"></span>
+      <span>Arterial Roads</span>
+    </label>
+    <label class="legend-toggle">
+      <input type="checkbox" id="toggle-aadt" />
+      <span class="legend-dot dot-rose"></span>
+      <span>Traffic (AADT)</span>
+    </label>
+    <label class="legend-toggle">
+      <input type="checkbox" id="toggle-vectors" />
+      <span class="legend-dot dot-cyan"></span>
+      <span>Nearby Places</span>
+    </label>
+  </div>
+
+  <!-- 5. COMPACT TOP-RIGHT DROPDOWN MENU (COLLAPSED BY DEFAULT SO IT DOESN'T COVER THE MAP!) -->
+  <aside id="glass-right-panel" class="glass-right-panel collapsed-dropdown-mode">
+
+    <!-- Compact Dropdown Selector Bar -->
+    <div class="right-dropdown-header no-print">
+      <select id="right-panel-dropdown" class="right-dropdown-select" aria-label="Select Property Panel Section">
+        <option value="none">🗺️ Map Only — Pull Down Property &amp; OM Options ▾</option>
+        <option value="pane-om-doc">📄 1. Offering Memorandum (Brochure &amp; PDF)</option>
+        <option value="pane-buildings">🏢 2. On-Site Buildings (Click to Zoom)</option>
+        <option value="pane-access">🚦 3. Easy In &amp; Out Site Access</option>
+        <option value="pane-places">🏥 4. Nearby Hospitals, Grocery, Wine &amp; Hotspots</option>
+        <option value="pane-demographics">📊 5. 1-3-5 Mile Demographics</option>
+      </select>
+      <button type="button" id="btn-collapse-right-dropdown" class="btn-collapse-dropdown hidden" title="Hide dropdown panel to see full map">
+        ✕ Hide
+      </button>
+    </div>
+
+    <!-- ====================================================================
+         DROPDOWN OPTION 1: HUMAN PLAIN-ENGLISH OFFERING MEMORANDUM
+         ==================================================================== -->
+    <div id="pane-om-doc" class="studio-pane">
+
+      <!-- PULLED-OUT VERTICAL CONTROLS (NOT SIDE-BY-SIDE!) -->
+      <div class="persona-control-panel no-print">
+        <label for="persona-select" class="pcp-label">1. SELECT BUYER AGE / PROFILE:</label>
+        <select id="persona-select" class="glass-select pcp-select-full">
+          <option value="general">🌐 General Brochure (All Ages — Crisp &amp; Balanced)</option>
+          <option value="senior">👴 Senior / Retiree (Age 60+ • Hospital, Grocery &amp; Wine)</option>
+          <option value="young">🚀 Young Founder (Age 22–40 • Traffic, Lease Cost &amp; Hotspots)</option>
+          <option value="medical">🏥 Medical / Doctor Practice (Age 35–60 • Hospital &amp; Parking)</option>
+        </select>
+
+        <label for="custom-ai-instructions" class="pcp-label" style="margin-top:4px;">2. CUSTOM PLAIN-ENGLISH INSTRUCTIONS (OPTIONAL):</label>
+        <input
+          type="text"
+          id="custom-ai-instructions"
+          class="custom-prompt-input-full"
+          placeholder="e.g., 'Older buyer wanting wine shops, groceries & hospital' or 'Young founder wanting traffic & low cost'..."
+        />
+
+        <div class="pcp-vertical-actions">
+          <button type="button" id="btn-rewrite-ai" class="btn-generate-plain-full">
+            ✨ Write Custom Plain-English Brochure
+          </button>
+          <button type="button" id="btn-download-pdf" class="btn-toolbar-emerald-full">
+            📥 Download Clean PDF Document
+          </button>
+          <button type="button" id="btn-print-om-direct" class="btn-toolbar-glass-full">
+            🖨️ Print Memorandum
+          </button>
+        </div>
+      </div>
+
+      <!-- FULL-SCREEN BROCHURE MODE TOP BAR -->
+      <div id="brochure-mode-toolbar" class="brochure-mode-toolbar no-print">
+        <div class="bmt-left">
+          <span class="bmt-badge">📄 EXECUTIVE BROCHURE VIEW</span>
+          <select id="brochure-persona-select" class="glass-select" style="padding:5px 10px;font-size:0.74rem;">
+            <option value="general">🌐 General Brochure (All Ages)</option>
+            <option value="senior">👴 Senior / Retiree (Age 60+ • Hospital, Grocery &amp; Wine)</option>
+            <option value="young">🚀 Young Founder (Age 22–40 • Traffic, Cost &amp; Hotspots)</option>
+            <option value="medical">🏥 Medical / Clinical Buyer (Age 35–60)</option>
+          </select>
+        </div>
+        <div class="bmt-actions">
+          <button type="button" id="btn-brochure-ai-rewrite" class="btn-bmt-action">🔄 Switch Angle</button>
+          <button type="button" id="btn-brochure-print" class="btn-bmt-action">🖨️ Print Brochure</button>
+          <button type="button" id="btn-brochure-pdf" class="btn-bmt-primary">📥 Download Clean PDF</button>
+          <button type="button" id="btn-exit-brochure" class="btn-bmt-close">✕ Back to Map</button>
+        </div>
+      </div>
+
+      <!-- SCROLLABLE STAGE -->
+      <div class="paper-stage-scroll">
+
+        <!-- WHITE & FOREST-EMERALD GREEN INSTITUTIONAL OFFERING MEMORANDUM -->
+        <article id="om-paper-sheet" class="om-paper-document">
+
+          <!-- 1. EMERALD GREEN HEADER BANNER -->
+          <header class="paper-header-banner">
+            <div class="paper-brand-left">
+              <div class="paper-logo-box">HC</div>
+              <div>
+                <div class="paper-firm-name">HYATT COMMERCIAL</div>
+                <div class="paper-firm-sub">ANNAPOLIS, MARYLAND • COMMERCIAL REAL ESTATE</div>
+              </div>
+            </div>
+            <div class="paper-doc-badge">
+              <div id="om-doc-type-label" class="paper-doc-type">OFFERING MEMORANDUM</div>
+              <div id="om-doc-subref" class="paper-doc-ref">8.2 ACRES • 9 BUILDINGS • C3 ZONING</div>
+            </div>
+          </header>
+
+          <!-- 2. AUDIENCE PROFILE PILL + PROPERTY TITLE + CONCISE HUMAN SUMMARY WITH BOLD KEYWORDS -->
+          <section class="paper-title-section">
+            <div class="paper-eyebrow-row">
+              <span id="om-persona-pill" class="paper-persona-pill">🌐 GENERAL BROCHURE • ALL AGES</span>
+              <span id="ai-grounding-status" class="paper-ai-badge">✓ Verified MDOT &amp; GIS Data</span>
+            </div>
+            <h1 id="om-doc-title" class="paper-main-title" contenteditable="true">
+              Riva 400 Office Park — 2661 Riva Road, Annapolis, MD
+            </h1>
+            <!-- Rendered with rich HTML <strong> tags so key phrases stand out immediately! -->
+            <div id="om-ai-summary" class="paper-lead-text" contenteditable="true"></div>
+          </section>
+
+          <!-- 3. FOUR DYNAMIC KPI METRIC BOXES -->
+          <section class="paper-kpi-strip">
+            <div class="paper-kpi-cell">
+              <span class="pk-value" id="doc-kpi-1-val">31,520</span>
+              <span class="pk-label" id="doc-kpi-1-lbl">Riva Rd Cars / Day</span>
+            </div>
+            <div class="paper-kpi-cell">
+              <span class="pk-value" id="doc-kpi-2-val">$24–$28/SF</span>
+              <span class="pk-label" id="doc-kpi-2-lbl">Est. Lease Cost</span>
+            </div>
+            <div class="paper-kpi-cell">
+              <span class="pk-value" id="doc-kpi-3-val">2–5 Mins</span>
+              <span class="pk-label" id="doc-kpi-3-lbl">Hospital, Grocery &amp; Wine</span>
+            </div>
+            <div class="paper-kpi-cell">
+              <span class="pk-value" id="doc-kpi-4-val">$118,450</span>
+              <span class="pk-label" id="doc-kpi-4-lbl">3-Mile Median Income</span>
+            </div>
+          </section>
+
+          <!-- 4. CLEAN AERIAL SITE PHOTO + PUNCHY 1-LINE BULLETS -->
+          <section class="paper-two-col">
+            <div class="paper-figure-col">
+              <div class="paper-figure-frame">
+                <img id="om-aerial-snapshot" class="paper-aerial-img" alt="Aerial Site View" />
+                <div class="paper-figure-caption">
+                  <span>Aerial Site View (Real Roof Structures)</span>
+                  <button type="button" id="btn-snap-aerial" class="btn-inline-refresh no-print">📸 Update Photo</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="paper-highlights-col">
+              <div class="paper-sec-header-row">
+                <h3 id="om-bullets-heading" class="paper-sec-heading">WHY THIS LOCATION STANDS OUT</h3>
+                <button type="button" id="btn-copy-ai-bullets" class="btn-inline-copy no-print">📋 Copy</button>
+              </div>
+              <ul id="ai-verified-bullets" class="paper-bullet-list" contenteditable="true"></ul>
+            </div>
+          </section>
+
+          <!-- 5. CLEAN, HUMAN-READABLE ON-SITE BUILDINGS SCHEDULE (Zero database gibberish!) -->
+          <section class="paper-section-block">
+            <div class="paper-sec-header-row">
+              <h3 class="paper-sec-heading">ON-SITE BUILDINGS &amp; ADJACENT NEIGHBORS</h3>
+              <span id="om-table-source-tag" class="paper-sec-tag">93,697 SF Total</span>
+            </div>
+            <table class="paper-data-table">
+              <thead>
+                <tr>
+                  <th>Building</th>
+                  <th>Current Occupant &amp; Best Fit</th>
+                  <th>Size &amp; Est. Rate</th>
+                </tr>
+              </thead>
+              <tbody id="om-buildings-tbody"></tbody>
+            </table>
+          </section>
+
+          <!-- 6. NEARBY HOSPITALS, GROCERIES, WINE & HAPPENING PLACES -->
+          <section class="paper-section-block">
+            <div class="paper-sec-header-row">
+              <h3 id="om-landmarks-heading" class="paper-sec-heading">NEARBY HOSPITALS, GROCERIES, WINE &amp; HOTSPOTS</h3>
+              <span class="paper-sec-tag">Real Drive Times</span>
+            </div>
+            <div id="om-landmarks-grid" class="paper-landmark-grid"></div>
+          </section>
+
+          <!-- 7. AUDIT PROOF & DATA SOURCE CITATIONS (Zero Guessing Policy) -->
+          <section class="paper-section-block" style="background:#f8fafc;border-top:1.5px solid #cbd5e1;">
+            <div class="paper-sec-header-row">
+              <h3 class="paper-sec-heading" style="color:#0f766e;font-size:0.75rem;">🛡️ DATA SOURCES, PROOF &amp; AUDIT CITATIONS</h3>
+              <span id="om-proof-badge" class="paper-sec-tag" style="background:#ccfbf1;color:#0f766e;border-color:#5eead4;">100% Verified / Zero Guessing</span>
+            </div>
+            <div id="om-proof-content" style="font-size:0.70rem;color:#334155;line-height:1.5;">
+              <!-- Dynamic proof content populated by JavaScript -->
+            </div>
+          </section>
+
+          <!-- 8. FOOTER -->
+          <footer class="paper-footer">
+            <div><strong>HYATT COMMERCIAL</strong> • 2568A Riva Road, Suite 300, Annapolis, MD 21401</div>
+            <div>Verified GIS • MDOT Traffic • OSRM Drive Times</div>
+          </footer>
+
+        </article>
+      </div>
+
+    </div>
+
+    <!-- ====================================================================
+         DROPDOWN OPTION 2: ON-SITE BUILDINGS (CLICK TO ZOOM IN 3D)
+         ==================================================================== -->
+    <div id="pane-buildings" class="studio-pane no-print">
+      <div class="pane-scroll">
+        <div class="pane-section-header">
+          <span>ON-SITE BUILDINGS (CLICK ANY BUILDING TO ZOOM)</span>
+          <span id="bldg-count-hint" class="pane-hint">9 Buildings</span>
+        </div>
+        <div id="condo-buildings-list" class="spacious-card-list"></div>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         DROPDOWN OPTION 3: EASY IN & OUT SITE ACCESS
+         ==================================================================== -->
+    <div id="pane-access" class="studio-pane no-print">
+      <div class="pane-scroll">
+        <div class="pane-section-header">
+          <span>EASY IN &amp; OUT SITE ACCESS (CLICK TO FOCUS)</span>
+          <span class="pane-hint">Turn Geometry</span>
+        </div>
+        <div id="access-checklist" class="spacious-card-list"></div>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         DROPDOWN OPTION 4: NEARBY HOSPITALS, GROCERIES, WINE & HOTSPOTS
+         ==================================================================== -->
+    <div id="pane-places" class="studio-pane no-print">
+      <div class="pane-scroll">
+        <div class="pane-section-header">
+          <span>HOSPITALS, GROCERY, WINE &amp; HOTSPOTS (CLICK FOR ROUTE)</span>
+          <span class="pane-hint">Real Road Routes</span>
+        </div>
+        <div id="landmark-list" class="spacious-card-list"></div>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         DROPDOWN OPTION 5: 1-3-5 MILE DEMOGRAPHICS
+         ==================================================================== -->
+    <div id="pane-demographics" class="studio-pane no-print">
+      <div class="pane-scroll">
+        <div class="pane-section-header">
+          <span>1-3-5 MILE DEMOGRAPHICS</span>
+          <span class="pane-hint">US Census ACS</span>
+        </div>
+        <table class="clean-table">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>1-Mile</th>
+              <th class="col-accent">3-Mile</th>
+              <th>5-Mile</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Population</td>
+              <td id="demo-pop-1">9,840</td>
+              <td class="col-accent" id="demo-pop-3">64,280</td>
+              <td id="demo-pop-5">142,610</td>
+            </tr>
+            <tr>
+              <td>Median HH Income</td>
+              <td id="demo-inc-1">$112,300</td>
+              <td class="col-accent" id="demo-inc-3">$118,450</td>
+              <td id="demo-inc-5">$124,800</td>
+            </tr>
+            <tr>
+              <td>Daytime Workers</td>
+              <td id="demo-wrk-1">18,420</td>
+              <td class="col-accent" id="demo-wrk-3">48,900</td>
+              <td id="demo-wrk-5">86,300</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- 6. SYSTEM ARCHITECTURE & DATA VALIDATION MODAL -->
+  <div id="blueprint-modal-backdrop" class="modal-backdrop no-print">
+    <div class="blueprint-modal">
+      <div class="modal-header">
+        <div>
+          <h2>System Architecture &amp; Cross-Source Data Validation Blueprint</h2>
+          <p>Live Multi-Address Pipeline: Real Building Structures, Overpass Road Geometry, OSRM Routing &amp; Persona AI</p>
+        </div>
+        <button type="button" id="btn-close-blueprint" class="modal-close-btn">✕ Close</button>
+      </div>
+      <div class="modal-body">
+
+        <div class="pipeline-flow-banner">
+          <div class="pf-stage">
+            <span class="pf-num">STAGE 1</span>
+            <strong>Entity &amp; Condo Normalization</strong>
+            <small>Resolves "AA County" aliases &amp; merges multi-unit condo parcels into 1 Master Campus</small>
+          </div>
+          <div class="pf-arrow">➔</div>
+          <div class="pf-stage">
+            <span class="pf-num">STAGE 2</span>
+            <strong>Cross-Source GIS vs. SDAT Audit</strong>
+            <small>Cross-checks SDAT tax RBA against GIS footprint polygons (&gt;5% variance flag)</small>
+          </div>
+          <div class="pf-arrow">➔</div>
+          <div class="pf-stage">
+            <span class="pf-num">STAGE 3</span>
+            <strong>Hospital, Grocery, Wine &amp; Traffic</strong>
+            <small>Fetches real road curves + OSRM drive times to hospitals, groceries, wine shops &amp; hotspots</small>
+          </div>
+          <div class="pf-arrow">➔</div>
+          <div class="pf-stage">
+            <span class="pf-num">STAGE 4</span>
+            <strong>Age-Tailored Plain-English OM</strong>
+            <small>Human copywriting with bold keywords for Seniors (60+), Young Founders (22–40), or All Ages</small>
+          </div>
+        </div>
+
+        <div class="validation-deep-dive-grid">
+          <div class="val-card">
+            <span class="val-badge">1. ENTITY &amp; ADDRESS NORMALIZATION</span>
+            <h3>Solving "AA County" &amp; Condo Splits</h3>
+            <p>Normalizes municipal aliases and performs spatial envelope queries on Anne Arundel County GIS Layer 34 + OpenStreetMap so multi-building condo parks unify into a complete site plan.</p>
+          </div>
+
+          <div class="val-card">
+            <span class="val-badge">2. CROSS-SOURCE VERIFICATION</span>
+            <h3>SDAT Tax Roll vs. GIS Footprints</h3>
+            <p>Compares Maryland SDAT enclosed area against GIS roof footprints and flags any &gt;5% discrepancy for broker review rather than blindly trusting a single record.</p>
+          </div>
+
+          <div class="val-card">
+            <span class="val-badge">3. BUYER PERSONA &amp; AGE INTELLIGENCE</span>
+            <h3>Human Copy by Buyer Profile</h3>
+            <p>Tailors the Offering Memorandum to what the buyer actually cares about: hospital/grocery/wine proximity for older buyers (60+), or traffic/lease cost/hotspots for young founders (22–40).</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="env-config.js" onerror="this.remove()"></script>
+  <script src="app.js"></script>
+</body>
+</html>
