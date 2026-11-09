@@ -2965,18 +2965,26 @@ async function fetchLiveSpatialEnvironment(lat, lng, formattedAddress, googleRou
   );
 
   // 1. Determine the REAL Frontage Street Name (from Google `route` component, address text, OSRM nearest street, or Overpass)
+  const isNearAnnapolis = isAnnapolisSubmarket(lat, lng, formattedAddress);
   const addressStreet = googleRouteName || extractStreetNameFromAddress(formattedAddress);
   const osrmStreetName = osrmNearest?.waypoints?.find((w) => w.name && w.name.trim().length > 2)?.name;
   let primaryRoadName = addressStreet || osrmStreetName || "Arterial Corridor";
-  let highwayName = "US-50 / Regional Highway";
+  let highwayName = isNearAnnapolis ? "US-50 / Regional Highway" : null;
 
   for (const rw of roadWays) {
     if (rw.tags?.name && !addressStreet && primaryRoadName === "Arterial Corridor") {
       primaryRoadName = rw.tags.name;
     }
-    if ((rw.tags?.highway === "motorway" || rw.tags?.highway === "trunk" || rw.tags?.ref) && rw.tags?.name) {
-      highwayName = rw.tags.ref ? `${rw.tags.ref} (${rw.tags.name})` : rw.tags.name;
+    if ((rw.tags?.highway === "motorway" || rw.tags?.highway === "trunk" || rw.tags?.highway === "primary") && (rw.tags?.name || rw.tags?.ref)) {
+      const hName = rw.tags.ref ? `${rw.tags.ref} (${rw.tags.name || ""})`.trim() : rw.tags.name;
+      if (!highwayName || isNearAnnapolis) {
+        highwayName = hName;
+      }
     }
+  }
+
+  if (!highwayName) {
+    highwayName = isNearAnnapolis ? "US-50 / Regional Highway" : `${primaryRoadName} Corridor`;
   }
 
   const roadFeatures = roadWays
@@ -3173,14 +3181,12 @@ async function fetchLiveSpatialEnvironment(lat, lng, formattedAddress, googleRou
     }
   }
 
-  // 3C. Verified Real-World Annapolis / Regional Fallback Anchors if neither Google nor Overpass returned a match
-  const isNearAnnapolis = haversineMiles(bLat, bLng, 38.9784, -76.545) < 12.0;
-
+  // 3C. Local Fallback Anchors if neither Google nor Overpass returned a match
   if (!groceryPoi) {
     const gCoords = isNearAnnapolis ? [-76.54032, 38.98215] : realStreetNextPt;
     const gDist = Math.max(0.2, haversineMiles(bLat, bLng, gCoords[1], gCoords[0]));
     groceryPoi = {
-      name: isNearAnnapolis ? "Whole Foods Market — Annapolis Towne Centre" : `${primaryRoadName} Supermarket & Pharmacy`,
+      name: isNearAnnapolis ? "Whole Foods Market — Annapolis Towne Centre" : `${primaryRoadName} Supermarket & Daily Essentials`,
       coords: gCoords,
       dist: gDist
     };
@@ -3190,7 +3196,7 @@ async function fetchLiveSpatialEnvironment(lat, lng, formattedAddress, googleRou
     const wCoords = isNearAnnapolis ? [-76.54085, 38.98128] : signalCoords;
     const wDist = Math.max(0.2, haversineMiles(bLat, bLng, wCoords[1], wCoords[0]));
     winePoi = {
-      name: isNearAnnapolis ? "Cooper's Hawk Winery & Fine Wine Merchants" : `${primaryRoadName} Dining & Retail Anchor`,
+      name: isNearAnnapolis ? "Cooper's Hawk Winery & Fine Wine Merchants" : `${primaryRoadName} Commercial & Retail Hub`,
       coords: wCoords,
       dist: wDist
     };
@@ -3200,21 +3206,40 @@ async function fetchLiveSpatialEnvironment(lat, lng, formattedAddress, googleRou
     const hCoords = isNearAnnapolis ? [-76.53562, 38.9881] : realStreetCurbPt;
     const hDist = Math.max(0.3, haversineMiles(bLat, bLng, hCoords[1], hCoords[0]));
     hospitalPoi = {
-      name: isNearAnnapolis ? "Luminis Health Anne Arundel Medical Center (380-Bed Hospital)" : "Regional Medical & Surgical Center",
+      name: isNearAnnapolis ? "Luminis Health Anne Arundel Medical Center (380-Bed Hospital)" : `${primaryRoadName} Healthcare & Clinic Center`,
       coords: hCoords,
       dist: hDist
     };
   }
 
-  // Find a real highway coordinate from `roadWays` (or verified US-50 / MD-665 ramp in Annapolis)
+  // Look for a real highway/motorway/expressway coordinate from `roadWays`
   const highwayWay = roadWays.find((w) => w.tags?.highway === "motorway" || w.tags?.highway === "trunk" || w.tags?.highway === "primary");
   const highwayMidPt = highwayWay?.geometry?.[Math.floor(highwayWay.geometry.length / 2)];
-  const realHighwayCoords = highwayMidPt
-    ? [highwayMidPt.lon, highwayMidPt.lat]
-    : isNearAnnapolis
-    ? [-76.5448, 38.9841]
-    : signalCoords;
-  const hwyDist = Math.max(0.2, haversineMiles(bLat, bLng, realHighwayCoords[1], realHighwayCoords[0]));
+
+  let realHighwayCoords = null;
+  let hwyCategory = "ARTERIAL & COMMUTER ACCESS";
+  let hwyTitle = `${primaryRoadName} Corridor Junction`;
+  let hwySummary = `Direct vehicular and commuter access along ${primaryRoadName}`;
+
+  if (isNearAnnapolis) {
+    realHighwayCoords = [-76.5448, 38.9841];
+    hwyCategory = "HIGHWAY & COMMUTER ACCESS";
+    hwyTitle = "US-50 / Regional Highway Interchange";
+    hwySummary = "Direct regional highway access for clients and commuters";
+  } else if (highwayMidPt) {
+    realHighwayCoords = [highwayMidPt.lon, highwayMidPt.lat];
+    const realHwyName = highwayWay.tags?.name || highwayWay.tags?.ref || highwayName || "Regional Expressway";
+    hwyCategory = "HIGHWAY & EXPRESSWAY ACCESS";
+    hwyTitle = `${realHwyName} Corridor`;
+    hwySummary = `Regional corridor and expressway connectivity via ${realHwyName}`;
+  } else {
+    realHighwayCoords = signalCoords || realStreetNextPt;
+    hwyCategory = "ARTERIAL & TRANSIT ACCESS";
+    hwyTitle = `${primaryRoadName} Arterial Junction`;
+    hwySummary = `Direct arterial connectivity serving ${primaryRoadName}`;
+  }
+
+  const hwyDist = Math.max(0.1, haversineMiles(bLat, bLng, realHighwayCoords[1], realHighwayCoords[0]));
 
   const diningOrWine = winePoi || hotspotPoi;
 
@@ -3251,13 +3276,13 @@ async function fetchLiveSpatialEnvironment(lat, lng, formattedAddress, googleRou
     },
     {
       rank: 4,
-      category: "HIGHWAY & COMMUTER ACCESS",
-      name: `${highwayName} Interchange`,
-      shortName: highwayName.slice(0, 18),
+      category: hwyCategory,
+      name: hwyTitle,
+      shortName: hwyTitle.slice(0, 18),
       coords: realHighwayCoords,
       distanceMiles: `${hwyDist.toFixed(1)} mi`,
       driveTimeMins: `${Math.max(1, Math.round(hwyDist * 2.1))} mins`,
-      summary: "Direct regional highway access for clients and commuters"
+      summary: hwySummary
     }
   ];
 
