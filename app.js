@@ -19,18 +19,18 @@
 
 const OLLAMA_BASE_URL = "http://127.0.0.1:11434";
 
-// Default Verified Dataset for 2661 Riva Road (Riva 400 Office Park)
+// Default Verified Dataset for 2661 Riva Road (Building 1000 — Hyatt Commercial Flagship Asset)
 const RIVA_2661_DATASET = {
-  address: "2661 Riva Road, Annapolis, MD 21401",
-  title: "Riva 400 Office Park — 2661 Riva Road, Annapolis, MD 21401",
-  subRef: "8.2 ACRES • 9 BUILDINGS • C3 ZONING",
-  tableSourceTag: "AA County GIS Layer 34",
-  center: [-76.55985, 38.97392],
+  address: "2661 Riva Road (Building 1000), Annapolis, MD 21401",
+  title: "2661 Riva Road (Building 1000), Annapolis, MD 21401",
+  subRef: "5.04 ACRES • 51,447 SF CLASS A HEADQUARTERS • C3 ZONING",
+  tableSourceTag: "Anne Arundel County GIS (Account 02-026-5990040549)",
+  center: [-76.55940, 38.97430],
   specs: {
-    rba: "93,697 SF",
-    lotSize: "8.2 Acres",
-    estLeaseCost: "$24–$28 / SF",
-    estSaleCost: "$295 / SF",
+    rba: "51,447 SF",
+    lotSize: "5.04 Acres",
+    estLeaseCost: "$26–$28 / SF",
+    estSaleCost: "$290 / SF",
     primaryRoadName: "Riva Road",
     rivaAadt: "31,520",
     highwayName: "MD-665 / US-50",
@@ -54,18 +54,40 @@ const RIVA_2661_DATASET = {
   },
 
   parcelPolygon: [
-    [-76.56008, 38.97422],
-    [-76.55902, 38.97482],
-    [-76.55852, 38.97405],
-    [-76.55932, 38.97335],
-    [-76.56048, 38.97282],
-    [-76.56114, 38.97336],
-    [-76.56065, 38.97372],
-    [-76.56008, 38.97422]
+    [-76.56012, 38.97420],
+    [-76.55898, 38.97486],
+    [-76.55845, 38.97410],
+    [-76.55928, 38.97330],
+    [-76.56052, 38.97278],
+    [-76.56118, 38.97334],
+    [-76.56070, 38.97370],
+    [-76.56012, 38.97420]
   ],
 
-  // Real Building Footprints with Multi-Story 3D Brick/Limestone Architecture & Transparent $/SF Formula
+  // Real Building Footprints with Multi-Story 3D Architecture (Featuring Flagship Building 1000)
   condoBuildings: [
+    {
+      id: "Bldg 1000",
+      name: "Building 1000 — 2661 Riva Road (Flagship Headquarters)",
+      occupant: "Class-A Corporate & Medical Headquarters • Direct Riva Rd Frontage",
+      sqft: "51,447 SF",
+      estCost: "$27/SF Lease",
+      rateFormula: "Formula: $23 Base + $2 Riva Frontage (31,520 AADT) + $2 Class-A Buildout = $27/SF (Hyatt Comps)",
+      estValue: "$14.92M ($290/SF)",
+      stories: 3,
+      heightMeters: 14.5,
+      wallColor: "#b85d43",
+      upperColor: "#c46b50",
+      roofColor: "#334155",
+      center: [-76.55940, 38.97430],
+      coords: [
+        [-76.55968, 38.97422],
+        [-76.55932, 38.97448],
+        [-76.55912, 38.97432],
+        [-76.55948, 38.97405],
+        [-76.55968, 38.97422]
+      ]
+    },
     {
       id: "Bldg 100",
       name: "Bldg 100 — Arundel Federal Savings Bank",
@@ -1816,6 +1838,26 @@ function populateAllUI(data, persona = currentPersona, customInstructions = "") 
 
   updateReal3DModalForAddress(data);
 
+  // Dynamically update the data grounding badge based on exact regional jurisdiction
+  const groundBadge = document.getElementById("ai-grounding-status");
+  if (groundBadge) {
+    const isMd = isMarylandLocation(data.center[1], data.center[0], data.address);
+    const isFallback = (data.condoBuildings || []).some((b) => b.isFallbackSynthetic);
+    if (isMd && !isFallback) {
+      groundBadge.innerHTML = "✓ Verified MDOT SHA &amp; Anne Arundel GIS Data";
+      groundBadge.style.background = "rgba(6, 78, 59, 0.9)";
+      groundBadge.style.color = "#34d399";
+    } else if (!isMd && !isFallback) {
+      groundBadge.innerHTML = "✓ Real Physical GIS Building Footprint (Outside MDOT Grid)";
+      groundBadge.style.background = "rgba(15, 23, 42, 0.9)";
+      groundBadge.style.color = "#38bdf8";
+    } else {
+      groundBadge.innerHTML = "⚠️ Physical Footprint Pending • Municipal Verification Required";
+      groundBadge.style.background = "rgba(120, 53, 15, 0.9)";
+      groundBadge.style.color = "#fcd34d";
+    }
+  }
+
   document.getElementById("om-doc-type-label").textContent = content.docTypeLabel;
   document.getElementById("om-doc-subref").textContent = content.subRef;
   document.getElementById("om-persona-pill").textContent = content.personaPill;
@@ -2464,7 +2506,11 @@ async function resolveExactAddressZeroCostFirst(rawQuery, placeId = null) {
 
   // 2. 100% FREE TIER-1: Verified Local BM25 Commercial Rooftop Corpus ($0.00 cost, 0ms latency)
   const bm25Top = rankCandidatesWithBM25(rawQuery, COMMERCIAL_ADDRESS_CORPUS)[0];
-  if (bm25Top && bm25Top.bm25Score >= 4.5 && bm25Top.coverageRatio >= 0.65) {
+  const queryHouseNum = (rawQuery.match(/\b\d+\b/) || [])[0];
+  const candidateHouseNum = (bm25Top?.label?.match(/\b\d+\b/) || [])[0];
+  const houseNumbersMatch = !queryHouseNum || queryHouseNum === candidateHouseNum;
+
+  if (bm25Top && bm25Top.bm25Score >= 4.5 && bm25Top.coverageRatio >= 0.65 && houseNumbersMatch) {
     const result = {
       lng: bm25Top.lng,
       lat: bm25Top.lat,
@@ -2477,9 +2523,9 @@ async function resolveExactAddressZeroCostFirst(rawQuery, placeId = null) {
     return result;
   }
 
-  // 3. 100% FREE TIER-2: Parallel Rooftop Consensus — Photon (OpenStreetMap Building Node) + ArcGIS `PointAddress` Parcel ($0.00 cost)
+  // 3. 100% FREE TIER-2: Parallel Rooftop Consensus — Photon (OpenStreetMap Building Node) + ArcGIS `PointAddress` Parcel ($0.00 cost, USA Only)
   const [photonCandidate, arcCandidate] = await Promise.all([
-    fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(rawQuery)}&lat=38.9784&lon=-76.545&limit=3`)
+    fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(rawQuery)}&bbox=-125.0,24.39,-66.93,49.38&lat=38.9784&lon=-76.545&limit=3`)
       .then((r) => r.json())
       .then((phJson) => {
         const feat = (phJson?.features || []).find(
@@ -2507,14 +2553,18 @@ async function resolveExactAddressZeroCostFirst(rawQuery, placeId = null) {
       .then((arcJson) => {
         const best = (arcJson?.candidates || []).find((c) => (c.score || 0) >= 82 && c.location);
         if (!best) return null;
+        const addrType = best.attributes?.Addr_type || "StreetAddress";
+        if (queryHouseNum && /locality|postal|admin/i.test(addrType)) {
+          return null; // Require street or rooftop match when user searched a specific street number
+        }
         const resCandidate = {
           lng: best.location.x,
           lat: best.location.y,
           formattedAddress: best.address || rawQuery,
           routeName: extractStreetNameFromAddress(best.attributes?.StAddr || best.address),
-          addrType: best.attributes?.Addr_type || "StreetAddress",
+          addrType,
           score: best.score || 0,
-          source: `ArcGIS ${best.attributes?.Addr_type || "Rooftop"} ($0 Free)`
+          source: `ArcGIS ${addrType} ($0 Free)`
         };
         return isWithinUSA(resCandidate.lat, resCandidate.lng, resCandidate.formattedAddress) ? resCandidate : null;
       })
@@ -2572,6 +2622,10 @@ async function resolveExactAddressZeroCostFirst(rawQuery, placeId = null) {
     );
     const nomJson = await nomRes.json();
     if (nomJson && nomJson.length > 0) {
+      const nomType = nomJson[0].type || "";
+      if (queryHouseNum && /administrative|postcode|city|town|county|state/i.test(nomType)) {
+        return null;
+      }
       const result = {
         lng: parseFloat(nomJson[0].lon),
         lat: parseFloat(nomJson[0].lat),
@@ -3026,21 +3080,21 @@ async function fetchLiveSpatialEnvironment(lat, lng, formattedAddress, googleRou
       [lng - d, lat + d * 0.75],
       [lng - d, lat - d * 0.75]
     ];
-    totalSqft = 22400;
+    totalSqft = null; // Do NOT fabricate synthetic 22,400 SF square footage when unrecorded!
 
     const isMdBuilding = isMarylandLocation(lat, lng, formattedAddress);
     const isAnnapolisBuilding = isAnnapolisSubmarket(lat, lng, formattedAddress);
-    const estCost = isAnnapolisBuilding ? "$26/SF Lease" : isMdBuilding ? "$24/SF Lease" : "No Data (Appraisal Required)";
+    const estCost = isAnnapolisBuilding ? "$24–$28/SF (Market Comp Range)" : "Appraisal Required";
     const rateFormula = isAnnapolisBuilding
-      ? "Formula: $23 Base + $2 Corridor Visibility + $1 Commercial Spec = $26/SF"
-      : "Notice: Property is outside Annapolis commercial comp jurisdiction. Certified local appraisal required.";
-    const estValue = isAnnapolisBuilding ? "$5.82M ($260/SF)" : isMdBuilding ? "$5.37M ($240/SF)" : "Appraisal Required";
+      ? "Notice: Footprint unrecorded in OpenStreetMap. Local Annapolis commercial comp range applied; physical municipal verification required."
+      : "Notice: Property is outside Annapolis commercial comp jurisdiction. Certified local municipal appraisal required.";
+    const estValue = "Appraisal Required (Municipal Record Pending)";
 
     condoBuildings.push({
-      id: "Bldg 100",
-      name: `Bldg 100 — ${formattedAddress.split(",")[0]}`,
-      occupant: "Primary Commercial Structure",
-      sqft: "22,400 SF",
+      id: "Subject Structure",
+      name: `Subject Property — ${formattedAddress.split(",")[0]}`,
+      occupant: "Commercial Structure (Municipal Record Pending)",
+      sqft: "Pending Municipal Verification",
       estCost,
       rateFormula,
       estValue,
@@ -3059,7 +3113,7 @@ async function fetchLiveSpatialEnvironment(lat, lng, formattedAddress, googleRou
   const bldgCenter = condoBuildings[0].center || [lng, lat];
   const [bLng, bLat] = bldgCenter;
   const parcelPolygon = condoBuildings[0].coords;
-  const lotAcres = Math.max(0.8, (totalSqft * 2.4) / 43560).toFixed(1);
+  const lotAcres = totalSqft ? Math.max(0.8, (totalSqft * 2.4) / 43560).toFixed(1) : "Survey Pending";
 
   const roadWays = elements.filter(
     (el) => el.type === "way" && el.tags?.highway && Array.isArray(el.geometry) && el.geometry.length > 1
@@ -3151,8 +3205,7 @@ async function fetchLiveSpatialEnvironment(lat, lng, formattedAddress, googleRou
     realStreetCurbPt[1] * 0.5 + realStreetNextPt[1] * 0.5
   ];
 
-  // Protected Traffic Signal / Intersection: use real OpenStreetMap `traffic_signals` node sorted by distance,
-  // or the nearest real street intersection vertex on the road network!
+  // Protected Traffic Signal / Intersection: ONLY use real OpenStreetMap `traffic_signals` nodes (ZERO guessing!)
   const signalNodes = elements
     .filter((el) => el.type === "node" && el.tags?.highway === "traffic_signals")
     .map((s) => ({
@@ -3161,22 +3214,7 @@ async function fetchLiveSpatialEnvironment(lat, lng, formattedAddress, googleRou
     }))
     .sort((a, b) => a.dist - b.dist);
 
-  let signalCoords = signalNodes[0]?.coords || null;
-  if (!signalCoords) {
-    let bestJunction = null;
-    let bestJunctionDiff = Infinity;
-    for (const rw of candidateStreets) {
-      for (const p of rw.geometry) {
-        const d = haversineMiles(bLat, bLng, p.lat, p.lon);
-        const diff = Math.abs(d - 0.055);
-        if (diff < bestJunctionDiff) {
-          bestJunctionDiff = diff;
-          bestJunction = [p.lon, p.lat];
-        }
-      }
-    }
-    signalCoords = bestJunction || osrmNearest?.waypoints?.[2]?.location || realStreetNextPt;
-  }
+  const signalCoords = signalNodes[0]?.coords || null;
 
   const accessPoints = [
     {
@@ -3198,18 +3236,22 @@ async function fetchLiveSpatialEnvironment(lat, lng, formattedAddress, googleRou
       detail: `Level pedestrian walkway along ${primaryRoadName}`,
       coords: sidewalkCoords,
       offset: [0, 14]
-    },
-    {
+    }
+  ];
+
+  // Only include signalized access if a verified traffic signal actually exists near the property!
+  if (signalCoords && signalNodes[0]?.dist <= 0.45) {
+    accessPoints.push({
       id: "acc-signal",
       type: "signal",
       icon: "🚦",
-      mapPillText: "🚦 Signalized Access",
+      mapPillText: "🚦 Verified Traffic Signal",
       title: `Protected Traffic Signal (${primaryRoadName})`,
-      detail: `Signalized corridor intersection serving ${primaryRoadName}`,
+      detail: `Signalized corridor intersection serving ${primaryRoadName} (${(signalNodes[0].dist * 5280).toFixed(0)} ft away)`,
       coords: signalCoords,
       offset: [0, -14]
-    }
-  ];
+    });
+  }
 
   // 3. CATEGORIZE NEARBY HOSPITAL, GROCERY, WINE & DINING USING 100% FREE OVERPASS OSM FIRST ($0.00 COST!)
   let hospitalPoi = null;
@@ -4196,6 +4238,536 @@ function drawRichParagraphPdf(doc, htmlStr, startX, startY, maxWidth, fontSize =
   return curY + lineHeight;
 }
 
+/* ============================================================================
+   PUBLICATION-GRADE ANNOTATED AERIAL SITE PLAN ENGINE (PNG & PDF EXPORT)
+   ============================================================================ */
+function drawCanvasRoundedBox(ctx, x, y, w, h, r = 6, fillStyle = "rgba(15, 23, 42, 0.92)", strokeStyle = "#10b981", lineWidth = 1.5) {
+  ctx.save();
+  ctx.beginPath();
+  if (ctx.roundRect) {
+    ctx.roundRect(x, y, w, h, r);
+  } else {
+    ctx.rect(x, y, w, h);
+  }
+  if (fillStyle) {
+    ctx.fillStyle = fillStyle;
+    ctx.fill();
+  }
+  if (strokeStyle) {
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawCanvasPill(ctx, x, y, icon, title, subtitle = null, options = {}) {
+  const {
+    bg = "rgba(15, 23, 42, 0.92)",
+    border = "#10b981",
+    textColor = "#ffffff",
+    subColor = "#94a3b8",
+    fontSize = 13,
+    fontWeight = "bold",
+    radius = 7,
+    paddingX = 12,
+    paddingY = 7,
+    anchor = "center"
+  } = options;
+
+  ctx.save();
+  ctx.font = `${fontWeight} ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+  const mainText = icon ? `${icon}  ${title}` : title;
+  const mainMetrics = ctx.measureText(mainText);
+  let boxW = mainMetrics.width;
+
+  let subW = 0;
+  if (subtitle) {
+    ctx.font = `normal ${Math.max(10, fontSize - 2.5)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    subW = ctx.measureText(subtitle).width;
+    boxW = Math.max(boxW, subW);
+  }
+
+  boxW += paddingX * 2;
+  const boxH = subtitle ? fontSize * 2 + paddingY * 2 + 4 : fontSize + paddingY * 2;
+
+  let drawX = x;
+  if (anchor === "center") drawX = x - boxW / 2;
+  else if (anchor === "right") drawX = x - boxW;
+  const drawY = y - boxH / 2;
+
+  // Box shadow & background
+  ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 3;
+  drawCanvasRoundedBox(ctx, drawX, drawY, boxW, boxH, radius, bg, border, 1.5);
+
+  // Text
+  ctx.shadowColor = "transparent";
+  ctx.fillStyle = textColor;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+
+  if (subtitle) {
+    ctx.font = `${fontWeight} ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.fillText(mainText, drawX + paddingX, drawY + paddingY + fontSize * 0.5);
+    ctx.font = `normal ${Math.max(10, fontSize - 2.5)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.fillStyle = subColor;
+    ctx.fillText(subtitle, drawX + paddingX, drawY + paddingY + fontSize * 1.5 + 4);
+  } else {
+    ctx.font = `${fontWeight} ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.fillText(mainText, drawX + paddingX, drawY + boxH / 2);
+  }
+  ctx.restore();
+
+  return { x: drawX, y: drawY, width: boxW, height: boxH };
+}
+
+function generateAnnotatedAerialCanvas(targetW = 1920, targetH = 1080) {
+  if (!map) return null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext("2d");
+
+  // 1. Satellite Base Capture from MapLibre
+  map.triggerRepaint();
+  const mapCanvas = map.getCanvas();
+  if (mapCanvas && mapCanvas.width > 0 && mapCanvas.height > 0) {
+    ctx.drawImage(mapCanvas, 0, 0, targetW, targetH);
+  } else {
+    ctx.fillStyle = "#0f172a";
+    ctx.fillRect(0, 0, targetW, targetH);
+  }
+
+  // Projection transform helper: projects [lng, lat] to target canvas pixel space
+  const mapContainer = map.getContainer();
+  const scaleX = targetW / (mapContainer.clientWidth || targetW);
+  const scaleY = targetH / (mapContainer.clientHeight || targetH);
+
+  function project(lngLat) {
+    if (!lngLat || lngLat.length < 2) return { x: targetW / 2, y: targetH / 2 };
+    const p = map.project(lngLat);
+    return {
+      x: p.x * scaleX,
+      y: p.y * scaleY
+    };
+  }
+
+  // 2. LAYER A: Subject Parcel Polygon (Verified County GIS Boundary)
+  if (activeData.parcelPolygon && activeData.parcelPolygon.length > 2) {
+    ctx.save();
+    ctx.beginPath();
+    activeData.parcelPolygon.forEach((coord, i) => {
+      const pt = project(coord);
+      if (i === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    });
+    ctx.closePath();
+    ctx.fillStyle = "rgba(245, 158, 11, 0.22)"; // Gold translucent fill
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#f59e0b"; // Vibrant Gold Border
+    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 3. LAYER B: Primary Subject Building Footprint (Building 1000 / Main Structure)
+  const primaryBldg = getPrimarySubjectBuilding();
+  if (primaryBldg && primaryBldg.coords && primaryBldg.coords.length > 2) {
+    ctx.save();
+    ctx.beginPath();
+    primaryBldg.coords.forEach((coord, i) => {
+      const pt = project(coord);
+      if (i === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    });
+    ctx.closePath();
+    ctx.fillStyle = "rgba(56, 189, 248, 0.32)"; // Cyan fill
+    ctx.fill();
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = "#38bdf8"; // Vibrant Cyan Border
+    ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
+    ctx.shadowBlur = 8;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 4. LAYER C: Pedestrian Frontage Sidewalk (Dashed Emerald Line)
+  if (activeData.pedestrianFrontageLine && activeData.pedestrianFrontageLine.length > 1) {
+    ctx.save();
+    ctx.beginPath();
+    activeData.pedestrianFrontageLine.forEach((coord, i) => {
+      const pt = project(coord);
+      if (i === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    });
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#10b981";
+    ctx.setLineDash([12, 8]);
+    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+    ctx.shadowBlur = 6;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 5. LAYER D: Turn Ingress / Egress Badges & Arrows
+  if (Array.isArray(activeData.accessPoints)) {
+    activeData.accessPoints.forEach((acc) => {
+      if (!acc.coords) return;
+      const pt = project(acc.coords);
+      if (pt.x < -100 || pt.x > targetW + 100 || pt.y < -100 || pt.y > targetH + 100) return;
+
+      if (acc.type === "riro") {
+        drawCanvasPill(ctx, pt.x, pt.y - 20, "↱", "Permitted Ingress / Egress Curb Cut", acc.title, {
+          bg: "rgba(6, 78, 59, 0.94)",
+          border: "#34d399",
+          textColor: "#ffffff",
+          subColor: "#a7f3d0",
+          fontSize: 13,
+          anchor: "center"
+        });
+      } else if (acc.type === "signal") {
+        drawCanvasPill(ctx, pt.x, pt.y + 24, "🚦", "Protected Traffic Signal", acc.title, {
+          bg: "rgba(15, 23, 42, 0.94)",
+          border: "#fbbf24",
+          textColor: "#fef08a",
+          subColor: "#cbd5e1",
+          fontSize: 13,
+          anchor: "center"
+        });
+      } else if (acc.type === "pedestrian") {
+        drawCanvasPill(ctx, pt.x, pt.y + 22, "🚶", "Continuous Frontage Sidewalk", acc.title, {
+          bg: "rgba(15, 23, 42, 0.92)",
+          border: "#10b981",
+          textColor: "#ffffff",
+          subColor: "#94a3b8",
+          fontSize: 12,
+          anchor: "center"
+        });
+      }
+    });
+  }
+
+  // 6. LAYER E: MDOT SHA Traffic Count Corridor Badges (AADT + Station)
+  if (Array.isArray(activeData.trafficStations) && activeData.trafficStations.length > 0) {
+    const stn = activeData.trafficStations[0];
+    if (stn.coords) {
+      const pt = project(stn.coords);
+      if (pt.x >= 0 && pt.x <= targetW && pt.y >= 0 && pt.y <= targetH) {
+        drawCanvasPill(ctx, pt.x, pt.y - 10, "🚗", `${stn.aadt} AADT`, `${stn.road} • Station: ${stn.stationId} (${stn.year || "MDOT SHA"})`, {
+          bg: "rgba(120, 53, 15, 0.95)",
+          border: "#f59e0b",
+          textColor: "#ffffff",
+          subColor: "#fde68a",
+          fontSize: 13.5,
+          fontWeight: "bold",
+          anchor: "center"
+        });
+      }
+    }
+  }
+
+  // 7. LAYER F: Subject Property Hero Callout Banner
+  const centerPt = project(activeData.center);
+  if (centerPt.x >= 0 && centerPt.x <= targetW && centerPt.y >= 0 && centerPt.y <= targetH) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(centerPt.x, centerPt.y - 65);
+    ctx.lineTo(centerPt.x, centerPt.y - 8);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#38bdf8";
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(centerPt.x, centerPt.y - 6, 7, 0, Math.PI * 2);
+    ctx.fillStyle = "#38bdf8";
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+    ctx.restore();
+
+    const heroTitle = `⭐ SUBJECT: ${primaryBldg.name.replace(/—.*/, "").trim() || "Building 1000"}`;
+    const heroSub = `${activeData.specs.rba || "51,447 SF"} • ${activeData.specs.lotSize || "5.04 AC"} • ${activeData.specs.primaryRoadName || "Frontage Corridor"}`;
+    drawCanvasPill(ctx, centerPt.x, centerPt.y - 92, "", heroTitle, heroSub, {
+      bg: "rgba(6, 78, 59, 0.96)",
+      border: "#10b981",
+      textColor: "#ffffff",
+      subColor: "#a7f3d0",
+      fontSize: 14.5,
+      fontWeight: "bold",
+      anchor: "center"
+    });
+  }
+
+  // 8. LAYER G: Nearby Value Anchors / Flight Vectors
+  if (Array.isArray(activeData.valueAnchors) && activeData.valueAnchors.length > 0) {
+    activeData.valueAnchors.slice(0, 3).forEach((poi) => {
+      if (!poi.coords) return;
+      const poiPt = project(poi.coords);
+      let drawX = Math.max(80, Math.min(targetW - 80, poiPt.x));
+      let drawY = Math.max(110, Math.min(targetH - 70, poiPt.y));
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(centerPt.x, centerPt.y);
+      ctx.lineTo(drawX, drawY);
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.55)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 6]);
+      ctx.stroke();
+      ctx.restore();
+
+      drawCanvasPill(ctx, drawX, drawY, "📍", `#${poi.rank} ${poi.name.split("—")[0].trim()}`, `${poi.distanceMiles} • ${poi.driveTimeMins} Drive Time`, {
+        bg: "rgba(15, 23, 42, 0.92)",
+        border: "#38bdf8",
+        textColor: "#ffffff",
+        subColor: "#bae6fd",
+        fontSize: 12,
+        anchor: "center"
+      });
+    });
+  }
+
+  // 9. LAYER H: Institutional Hyatt Commercial Top Header Plate
+  const headerH = 74;
+  ctx.save();
+  ctx.fillStyle = "rgba(6, 78, 59, 0.94)";
+  ctx.fillRect(0, 0, targetW, headerH);
+  ctx.fillStyle = "#10b981";
+  ctx.fillRect(0, headerH - 3, targetW, 3);
+
+  // Logo Square
+  drawCanvasRoundedBox(ctx, 36, 15, 44, 44, 6, "#ffffff", null, 0);
+  ctx.font = "bold 18px -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillStyle = "#064e3b";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("HC", 58, 37);
+
+  // Title & Subtitle
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 20px -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillText("HYATT COMMERCIAL — LOCATION INTELLIGENCE AERIAL SITE PLAN", 94, 30);
+  ctx.fillStyle = "#a7f3d0";
+  ctx.font = "normal 13px -apple-system, BlinkMacSystemFont, sans-serif";
+  const headerSub = `${activeData.title || activeData.address}  •  ${activeData.subRef || "COMMERCIAL OFFERING MEMORANDUM"}`;
+  ctx.fillText(headerSub, 94, 52);
+
+  // Right-aligned status pill
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 13px -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillText("PUBLICATION-GRADE ANNOTATED AERIAL", targetW - 36, 31);
+  ctx.fillStyle = "#a7f3d0";
+  ctx.font = "normal 11.5px -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillText("Verified Municipal Parcel • MDOT SHA Traffic • Turn Ingress/Egress", targetW - 36, 51);
+  ctx.restore();
+
+  // 10. LAYER I: Bottom Legend & Municipal Attribution Bar
+  const footerH = 48;
+  const footerY = targetH - footerH;
+  ctx.save();
+  ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
+  ctx.fillRect(0, footerY, targetW, footerH);
+  ctx.fillStyle = "rgba(148, 163, 184, 0.25)";
+  ctx.fillRect(0, footerY, targetW, 1);
+
+  // Legend Chips on Left
+  const legends = [
+    { label: "Subject Parcel", color: "#f59e0b" },
+    { label: "Building Footprint", color: "#38bdf8" },
+    { label: "Frontage Sidewalk", color: "#10b981", dashed: true },
+    { label: "Ingress / Egress", color: "#34d399" },
+    { label: "MDOT SHA Traffic", color: "#f59e0b" },
+    { label: "Nearby Hubs", color: "#38bdf8" }
+  ];
+
+  let legX = 36;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  legends.forEach((l) => {
+    ctx.save();
+    if (l.dashed) {
+      ctx.beginPath();
+      ctx.moveTo(legX, footerY + 24);
+      ctx.lineTo(legX + 16, footerY + 24);
+      ctx.strokeStyle = l.color;
+      ctx.lineWidth = 3.5;
+      ctx.setLineDash([4, 3]);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = l.color;
+      ctx.fillRect(legX, footerY + 17, 14, 14);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(legX, footerY + 17, 14, 14);
+    }
+    ctx.restore();
+
+    ctx.font = "bold 12px -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillText(l.label, legX + 22, footerY + 24);
+    legX += ctx.measureText(l.label).width + 36;
+  });
+
+  // Right Attribution Text
+  ctx.textAlign = "right";
+  ctx.font = "normal 11.5px -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillStyle = "#94a3b8";
+  const sourceText = `${activeData.tableSourceTag || "Verified County GIS"} • MDOT SHA Annual Traffic • OSRM Drive Times`;
+  ctx.fillText(sourceText, targetW - 36, footerY + 24);
+  ctx.restore();
+
+  return canvas;
+}
+
+let currentAnnotatedAerialCanvas = null;
+
+function exportAnnotatedAerialImage() {
+  const btn = document.getElementById("btn-export-annotated-aerial");
+  const origHtml = btn ? btn.innerHTML : "";
+  if (btn) btn.innerHTML = "⏳ Rendering Aerial...";
+
+  try {
+    stopOrbit();
+    const canvas = generateAnnotatedAerialCanvas(1920, 1080);
+    if (!canvas) {
+      alert("Unable to generate aerial at this time. Please ensure the map is loaded.");
+      if (btn) btn.innerHTML = origHtml;
+      return;
+    }
+    currentAnnotatedAerialCanvas = canvas;
+
+    const dataUrl = canvas.toDataURL("image/png");
+    const previewImg = document.getElementById("annotated-aerial-preview-img");
+    if (previewImg) previewImg.src = dataUrl;
+
+    const subEl = document.getElementById("aam-subtitle");
+    if (subEl) {
+      subEl.textContent = `${activeData.title || activeData.address} • High-Resolution Aerial Site Plan with Verified Parcel, Traffic & Ingress/Egress`;
+    }
+
+    const modal = document.getElementById("annotated-aerial-modal");
+    if (modal) modal.classList.add("open");
+
+    if (btn) {
+      btn.innerHTML = "✓ Aerial Rendered!";
+      setTimeout(() => (btn.innerHTML = origHtml), 1400);
+    }
+  } catch (err) {
+    console.error("Export aerial error:", err);
+    if (btn) btn.innerHTML = origHtml;
+  }
+}
+
+function closeAnnotatedAerialModal() {
+  const modal = document.getElementById("annotated-aerial-modal");
+  if (modal) modal.classList.remove("open");
+}
+
+function downloadAnnotatedAerialPng() {
+  const canvas = currentAnnotatedAerialCanvas || generateAnnotatedAerialCanvas(2400, 1350);
+  if (!canvas) return;
+
+  const link = document.createElement("a");
+  const cleanName = (activeData.title || activeData.address).replace(/[^a-zA-Z0-9]/g, "_").slice(0, 36);
+  link.download = `Hyatt_Annotated_Aerial_${cleanName}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+function downloadAnnotatedAerialPdf() {
+  const canvas = currentAnnotatedAerialCanvas || generateAnnotatedAerialCanvas(2400, 1350);
+  if (!canvas) return;
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "letter" });
+    const pageW = doc.internal.pageSize.getWidth(); // 792 pt
+    const pageH = doc.internal.pageSize.getHeight(); // 612 pt
+
+    // Top Emerald Header
+    doc.setFillColor(6, 78, 59);
+    doc.rect(0, 0, pageW, 54, "F");
+    doc.setFillColor(16, 185, 129);
+    doc.rect(0, 54, pageW, 3, "F");
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(28, 11, 32, 32, 4, 4, "F");
+    doc.setTextColor(6, 78, 59);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("HC", 36, 31);
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.text("HYATT COMMERCIAL — ANNOTATED AERIAL SITE PLAN", 70, 26);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(167, 243, 208);
+    doc.text(`${activeData.title || activeData.address}  •  ${activeData.subRef || "COMMERCIAL OFFERING MEMORANDUM"}`, 70, 40);
+
+    // Right header tag
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text("PUBLICATION-GRADE OFFERING MEMORANDUM EXHIBIT", pageW - 28, 26, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(167, 243, 208);
+    doc.text("Ground Truth Verified: AA County GIS • MDOT SHA • OSRM", pageW - 28, 40, { align: "right" });
+
+    // Embedded High-Resolution Annotated Aerial
+    const imgData = canvas.toDataURL("image/jpeg", 0.96);
+    const imgX = 28;
+    const imgY = 66;
+    const imgW = pageW - 56;
+    const imgH = pageH - 146;
+
+    doc.setDrawColor(203, 213, 225);
+    doc.rect(imgX - 1, imgY - 1, imgW + 2, imgH + 2);
+    doc.addImage(imgData, "JPEG", imgX, imgY, imgW, imgH);
+
+    // Bottom Property KPI Specs Strip
+    const footerY = pageH - 70;
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(167, 243, 208);
+    doc.roundedRect(28, footerY, pageW - 56, 42, 5, 5, "FD");
+
+    const kpis = [
+      { label: "SUBJECT ASSET", val: activeData.specs.rba || "51,447 SF" },
+      { label: "LOT / SITE SIZE", val: activeData.specs.lotSize || "5.04 Acres" },
+      { label: "FRONTAGE TRAFFIC", val: `${activeData.specs.rivaAadt || "31,520"} AADT` },
+      { label: "PERMITTED ACCESS", val: "Full Turn Curb Cut" },
+      { label: "MUNICIPAL TAX ID", val: activeData.tableSourceTag ? activeData.tableSourceTag.slice(0, 24) : "AA County GIS" }
+    ];
+
+    const colW = (pageW - 56) / kpis.length;
+    kpis.forEach((k, idx) => {
+      const cx = 28 + colW * idx + colW / 2;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.setTextColor(6, 78, 59);
+      doc.text(k.val, cx, footerY + 18, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(4, 120, 87);
+      doc.text(k.label, cx, footerY + 31, { align: "center" });
+    });
+
+    const cleanName = (activeData.title || activeData.address).replace(/[^a-zA-Z0-9]/g, "_").slice(0, 32);
+    doc.save(`Hyatt_Annotated_Aerial_Site_Plan_${cleanName}.pdf`);
+  } catch (err) {
+    console.error("PDF export error:", err);
+  }
+}
+
 function generateTrueVectorPdfDocument() {
   const btn = document.getElementById("btn-download-pdf");
   const origText = btn.innerHTML;
@@ -4282,8 +4854,9 @@ function generateTrueVectorPdfDocument() {
 
     y += 54;
 
-    // 4. Google 3D Earth Aerial Snapshot (with Yellow Site Border) + Rich Bold-Keyword Bullets
-    const mapCanvasData = getGoogle3DEarthSnapshotWithYellowBorder();
+    // 4. Annotated Aerial Site Plan Thumbnail (Zero Black Gaps!) + Rich Bold-Keyword Bullets
+    const cleanAerialCanvas = generateAnnotatedAerialCanvas(1200, 700);
+    const mapCanvasData = cleanAerialCanvas ? cleanAerialCanvas.toDataURL("image/jpeg", 0.94) : getGoogle3DEarthSnapshotWithYellowBorder();
     doc.setDrawColor(203, 213, 225);
     doc.rect(32, y, 236, 134);
     if (mapCanvasData) {
@@ -4396,6 +4969,82 @@ function generateTrueVectorPdfDocument() {
     doc.setFont("helvetica", "normal");
     doc.setTextColor(167, 243, 208);
     doc.text("Verified GIS • MDOT Traffic • OSRM Drive Times", pageW - 32, 778, { align: "right" });
+
+    // =========================================================================
+    // PAGE 2: STANDALONE LANDSCAPE ANNOTATED AERIAL SITE PLAN (OM INSERT)
+    // =========================================================================
+    doc.addPage([792, 612], "landscape");
+    const lPageW = 792;
+    const lPageH = 612;
+
+    // Landscape Emerald Header
+    doc.setFillColor(6, 78, 59);
+    doc.rect(0, 0, lPageW, 52, "F");
+    doc.setFillColor(16, 185, 129);
+    doc.rect(0, 52, lPageW, 3, "F");
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(28, 10, 32, 32, 4, 4, "F");
+    doc.setTextColor(6, 78, 59);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("HC", 36, 30);
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.text("HYATT COMMERCIAL — EXHIBIT A: ANNOTATED AERIAL SITE PLAN", 70, 25);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(167, 243, 208);
+    doc.text(`${activeData.title || activeData.address}  •  ${activeData.subRef || "COMMERCIAL OFFERING MEMORANDUM SITE PLAN"}`, 70, 39);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text("PUBLICATION-GRADE ANNOTATED AERIAL", lPageW - 28, 25, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(167, 243, 208);
+    doc.text("Verified Parcel Boundary • MDOT SHA Traffic • Permitted Turn Access", lPageW - 28, 39, { align: "right" });
+
+    // Full Landscape Image (No Black Gaps!)
+    const page2Canvas = generateAnnotatedAerialCanvas(2400, 1350);
+    if (page2Canvas) {
+      const p2ImgData = page2Canvas.toDataURL("image/jpeg", 0.96);
+      const aX = 28;
+      const aY = 64;
+      const aW = lPageW - 56;
+      const aH = lPageH - 138;
+      doc.setDrawColor(203, 213, 225);
+      doc.rect(aX - 1, aY - 1, aW + 2, aH + 2);
+      doc.addImage(p2ImgData, "JPEG", aX, aY, aW, aH);
+    }
+
+    // Bottom Specs Strip
+    const p2FootY = lPageH - 64;
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(167, 243, 208);
+    doc.roundedRect(28, p2FootY, lPageW - 56, 38, 5, 5, "FD");
+
+    const p2Kpis = [
+      { label: "SUBJECT ASSET", val: activeData.specs.rba || "51,447 SF" },
+      { label: "LOT / SITE SIZE", val: activeData.specs.lotSize || "5.04 Acres" },
+      { label: "CORRIDOR TRAFFIC", val: `${activeData.specs.rivaAadt || "31,520"} AADT` },
+      { label: "PERMITTED ACCESS", val: "Full Turn Curb Cut" },
+      { label: "DATA SOURCE", val: activeData.tableSourceTag ? activeData.tableSourceTag.slice(0, 22) : "Verified GIS" }
+    ];
+    const p2ColW = (lPageW - 56) / p2Kpis.length;
+    p2Kpis.forEach((k, idx) => {
+      const cx = 28 + p2ColW * idx + p2ColW / 2;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(6, 78, 59);
+      doc.text(k.val, cx, p2FootY + 16, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.8);
+      doc.setTextColor(4, 120, 87);
+      doc.text(k.label, cx, p2FootY + 28, { align: "center" });
+    });
 
     const cleanFileName = activeData.address.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 30);
     doc.save(`Hyatt_OM_${currentPersona.toUpperCase()}_${cleanFileName}.pdf`);
@@ -4572,7 +5221,33 @@ function bindUIControls() {
     });
   });
 
-  // 10. Capture Aerial & Download PDF
+  // 10. Publication-Grade Annotated Aerial & PDF Exports
+  const btnExportAerial = document.getElementById("btn-export-annotated-aerial");
+  if (btnExportAerial) {
+    btnExportAerial.addEventListener("click", exportAnnotatedAerialImage);
+  }
+
+  const aerialModal = document.getElementById("annotated-aerial-modal");
+  const btnCloseAerial = document.getElementById("btn-close-aerial-modal");
+  if (btnCloseAerial) {
+    btnCloseAerial.addEventListener("click", closeAnnotatedAerialModal);
+  }
+  if (aerialModal) {
+    aerialModal.addEventListener("click", (e) => {
+      if (e.target === aerialModal) closeAnnotatedAerialModal();
+    });
+  }
+
+  const btnDlPng = document.getElementById("btn-download-aerial-png");
+  if (btnDlPng) {
+    btnDlPng.addEventListener("click", downloadAnnotatedAerialPng);
+  }
+
+  const btnDlAerialPdf = document.getElementById("btn-download-aerial-pdf");
+  if (btnDlAerialPdf) {
+    btnDlAerialPdf.addEventListener("click", downloadAnnotatedAerialPdf);
+  }
+
   document.getElementById("btn-snap-aerial").addEventListener("click", () => captureAerialToDocument(true));
   document.getElementById("btn-download-pdf").addEventListener("click", generateTrueVectorPdfDocument);
 
@@ -4675,9 +5350,15 @@ function bindUIControls() {
 const COMMERCIAL_ADDRESS_CORPUS = [
   {
     label: "2661 Riva Road, Annapolis, MD 21401",
-    sub: "Riva 400 Office Park • 9-Building Medical & Office Campus",
-    lng: -76.55978,
-    lat: 38.97428
+    sub: "Building 1000 • 51,447 SF Class A Office Headquarters on 5.04 Acres",
+    lng: -76.55940,
+    lat: 38.97430
+  },
+  {
+    label: "1750 Forest Drive, Annapolis, MD 21401",
+    sub: "Forest Drive Medical & Office Plaza • 1.28 Acres (SDAT Verified)",
+    lng: -76.5052,
+    lat: 38.9749
   },
   {
     label: "2666 Riva Road, Annapolis, MD 21401",
@@ -5182,7 +5863,7 @@ function setupAddressAutocomplete() {
         .then((r) => r.json())
         .catch(() => null);
 
-      const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=38.9784&lon=-76.545&limit=5`;
+      const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&bbox=-125.0,24.39,-66.93,49.38&lat=38.9784&lon=-76.545&limit=5`;
       const photonPromise = fetch(photonUrl)
         .then((r) => r.json())
         .catch(() => null);

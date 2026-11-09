@@ -239,17 +239,21 @@
 
     <!-- Action Controls (With Deep Settings & API Keys in Heading!) -->
     <div class="header-actions">
+      <button type="button" id="btn-export-annotated-aerial" class="glass-btn btn-hero-export" title="Export Publication-Grade Annotated Aerial Site Plan (PNG & PDF)">
+        <span class="btn-icon">📸</span> <strong>Export Annotated Aerial</strong>
+      </button>
+
       <button type="button" id="btn-orbit-toggle" class="glass-btn btn-orbit" title="Circle 360° around the site">
         <span id="orbit-icon">🔄</span>
         <span id="orbit-label">Orbit</span>
       </button>
 
       <button type="button" id="btn-export-brochure" class="glass-btn btn-brochure-highlight" title="Open Full-Page Printable OM Brochure View">
-        📄 Brochure View
+        📄 Full OM Brochure
       </button>
 
       <button type="button" id="btn-open-real-3d" class="glass-btn" title="Pull out API Keys, Google 3D Earth Settings &amp; Deep Configuration">
-        ⚙️ API &amp; Settings ▾
+        ⚙️ Settings ▾
       </button>
     </div>
   </header>
@@ -667,6 +671,32 @@
         <button type="button" id="btn-close-usa-blockage" class="btn-usa-blockage-primary">
           🔍 Search a US Commercial Property Address
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. ANNOTATED AERIAL SITE PLAN PREVIEW & EXPORT MODAL -->
+  <div id="annotated-aerial-modal" class="modal-backdrop no-print">
+    <div class="annotated-aerial-dialog">
+      <div class="modal-header">
+        <div>
+          <h2>📸 Publication-Ready Annotated Aerial Site Plan</h2>
+          <p id="aam-subtitle">High-Resolution Commercial Offering Memorandum Site Plan with Verified Parcel, Traffic &amp; Turn Movements</p>
+        </div>
+        <button type="button" id="btn-close-aerial-modal" class="modal-close-btn">✕ Close</button>
+      </div>
+      <div class="modal-body aam-body">
+        <div class="aam-preview-wrapper">
+          <img id="annotated-aerial-preview-img" alt="Annotated Aerial Site Plan Preview" />
+        </div>
+        <div class="aam-action-bar">
+          <button type="button" id="btn-download-aerial-png" class="btn-aam-primary">
+            ⬇️ Download High-Res PNG (1920×1080)
+          </button>
+          <button type="button" id="btn-download-aerial-pdf" class="btn-aam-secondary">
+            📄 Download Full-Page Aerial PDF
+          </button>
+        </div>
       </div>
     </div>
   </div>
