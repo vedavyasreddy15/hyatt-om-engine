@@ -504,7 +504,7 @@ function initMapLibre() {
           ],
           tileSize: 256,
           maxzoom: 21,
-          attribution: "Google Hybrid Map, MDOT SHA, OSRM"
+          attribution: "Google Hybrid Map, OpenStreetMap contributors, OSRM"
         }
       },
       layers: [
@@ -1464,7 +1464,7 @@ function initMapSourcesAndLayers() {
     source: "subject-parcel",
     paint: {
       "fill-color": "#fbbf24",
-      "fill-opacity": 0.18
+      "fill-opacity": 0.28
     }
   });
 
@@ -1473,8 +1473,8 @@ function initMapSourcesAndLayers() {
     type: "line",
     source: "subject-parcel",
     paint: {
-      "line-color": "#facc15",
-      "line-width": 3.5
+      "line-color": "#f59e0b",
+      "line-width": 4.5
     }
   });
 
@@ -1549,13 +1549,27 @@ function updateReal3DModalForAddress(data) {
 function updateMapGeometry(data) {
   if (!map || !map.getSource("subject-parcel")) return;
 
-  // Always include all subject building footprints on the normal map so Site Boundary & Roofs is ALWAYS visible!
+  // Always include all subject building footprints and parcel bounds on the normal map so Site Boundary & Roofs is ALWAYS visible!
   const validBuildings = (data.condoBuildings || []).filter(
     (b) => Array.isArray(b.coords) && b.coords.length >= 4
   );
-  const exactBuildingPolygons = validBuildings.map((b) => [b.coords]);
-  if (exactBuildingPolygons.length === 0 && Array.isArray(data.parcelPolygon) && data.parcelPolygon.length >= 4) {
+  const exactBuildingPolygons = [];
+  if (Array.isArray(data.parcelPolygon) && data.parcelPolygon.length >= 4) {
     exactBuildingPolygons.push([data.parcelPolygon]);
+  }
+  validBuildings.forEach((b) => {
+    exactBuildingPolygons.push([b.coords]);
+  });
+  if (exactBuildingPolygons.length === 0 && data.center) {
+    const [cLng, cLat] = data.center;
+    const d = 0.00030;
+    exactBuildingPolygons.push([[
+      [cLng - d, cLat - d * 0.75],
+      [cLng + d, cLat - d * 0.75],
+      [cLng + d, cLat + d * 0.75],
+      [cLng - d, cLat + d * 0.75],
+      [cLng - d, cLat - d * 0.75]
+    ]]);
   }
 
   map.getSource("subject-parcel").setData({
@@ -2917,7 +2931,7 @@ async function fetchLiveSpatialEnvironment(lat, lng, formattedAddress, googleRou
 
   if (condoBuildings.length === 0) {
     // Mark as `isFallbackSynthetic: true` so `updateMapGeometry` does NOT draw a fake yellow box in the dirt!
-    const d = 0.00014;
+    const d = 0.00028;
     const poly = [
       [lng - d, lat - d * 0.75],
       [lng + d, lat - d * 0.75],
@@ -3691,11 +3705,6 @@ function setSmartViewMode(mode) {
 
   if (mode === "site") {
     clearMapPointOutCallout();
-    layerVisibility.parcel = false;
-    layerVisibility.access = false;
-    layerVisibility.corridors = false;
-    layerVisibility.aadt = false;
-    layerVisibility.vectors = false;
 
     const primaryBldg = getPrimarySubjectBuilding();
     cesiumFocusedBuilding = primaryBldg;
@@ -3704,9 +3713,22 @@ function setSmartViewMode(mode) {
     if (cesiumActiveTileset && cesiumContainer) {
       cesiumContainer.classList.remove("hidden");
       isCesiumActive = true;
+      layerVisibility.parcel = false;
+      layerVisibility.access = false;
       flyCesiumToAddress(siteTarget[0], siteTarget[1], computeWholeBuildingRangeMeters(primaryBldg), -40.0);
       renderCesiumYellowSiteBorder();
+    } else {
+      // Normal map fallback: keep site boundaries & access badges ON so the user sees the property clearly!
+      layerVisibility.parcel = true;
+      layerVisibility.access = true;
+      if (cesiumContainer) {
+        cesiumContainer.classList.add("hidden");
+        isCesiumActive = false;
+      }
     }
+    layerVisibility.corridors = false;
+    layerVisibility.aadt = false;
+    layerVisibility.vectors = false;
     map.flyTo({
       center: siteTarget,
       zoom: 18.35,
@@ -3719,7 +3741,7 @@ function setSmartViewMode(mode) {
     layerVisibility.parcel = true;
     layerVisibility.access = true;
     layerVisibility.corridors = true;
-    layerVisibility.aadt = true;
+    layerVisibility.aadt = isMarylandLocation(lat, lng, activeData.formattedAddress);
     layerVisibility.vectors = false;
     if (cesiumContainer) {
       cesiumContainer.classList.add("hidden");
@@ -3898,13 +3920,6 @@ function getGoogle3DEarthSnapshotWithYellowBorder(forceFreshCapture = false) {
       if (wasHidden && cesiumContainer) {
         cesiumContainer.classList.remove("hidden");
         cesiumViewer.resize();
-      }
-
-      // If user clicked "📸 Update Photo" while in Full Brochure View, advance the 3D angle slightly so every click captures a fresh crystal-clear 3D screenshot!
-      if (forceFreshCapture && document.body.classList.contains("presentation-mode") && !isOrbiting) {
-        cesiumViewHeadingDeg = (cesiumViewHeadingDeg + 35) % 360;
-        refreshCesiumLockedHeightSample(true);
-        applyCesiumLockedBuildingCamera();
       }
 
       renderCesiumYellowSiteBorder();
