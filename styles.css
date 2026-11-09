@@ -2384,3 +2384,167 @@ body.presentation-mode .earth-zoom-controls {
     print-color-adjust: exact !important;
   }
 }
+
+/* ============================================================================
+   USA COMMERCIAL PROPERTIES ONLY GATEKEEPER / BLOCKAGE MODAL
+   ============================================================================ */
+.usa-blockage-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 9, 18, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: ubFadeIn 0.22s ease-out;
+}
+
+.usa-blockage-backdrop.hidden {
+  display: none !important;
+}
+
+.usa-blockage-card {
+  max-width: 560px;
+  width: 100%;
+  background: #0f172a;
+  border: 1.5px solid rgba(239, 68, 68, 0.55);
+  border-radius: 20px;
+  padding: 32px 30px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85), 0 0 50px rgba(239, 68, 68, 0.2);
+  color: #f8fafc;
+  text-align: center;
+  animation: ubScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ubFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ubScaleUp {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.usa-blockage-icon {
+  font-size: 3.5rem;
+  line-height: 1;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 0 16px rgba(239, 68, 68, 0.5));
+}
+
+.usa-blockage-badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  color: #fca5a5;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 14px;
+}
+
+.usa-blockage-card h2 {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 10px;
+  line-height: 1.25;
+}
+
+.usa-blockage-card p {
+  font-size: 0.92rem;
+  color: #cbd5e1;
+  line-height: 1.55;
+  margin: 0 0 16px;
+}
+
+.usa-blockage-searched {
+  background: rgba(2, 6, 23, 0.75);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+  padding: 11px 16px;
+  margin: 0 0 18px;
+  font-size: 0.88rem;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+
+.usa-blockage-searched .ub-label {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.usa-blockage-searched strong {
+  color: #fca5a5;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.usa-blockage-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  margin-bottom: 24px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ub-reason-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
+.ub-reason-item strong {
+  color: #e2e8f0;
+}
+
+.ub-dot {
+  font-size: 0.95rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.usa-blockage-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-usa-blockage-primary {
+  flex: 1;
+  padding: 13px 20px;
+  border-radius: 10px;
+  background: #047857;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border: 1px solid #10b981;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(4, 120, 87, 0.4);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.btn-usa-blockage-primary:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}

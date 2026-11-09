@@ -2305,6 +2305,72 @@ function hideAddressNotFoundMessage() {
   if (errEl) errEl.classList.add("hidden");
 }
 
+/* ============================================================================
+   USA COMMERCIAL PROPERTIES ONLY GATEKEEPER & BLOCKAGE SYSTEM
+   ============================================================================ */
+function isWithinUSA(lat, lng, address = "") {
+  const addr = String(address || "").toLowerCase();
+
+  // 1. Explicit Non-US Country / International Text Blacklist
+  const nonUsCountryRegex =
+    /\b(india|telangana|hyderabad|bengaluru|bangalore|mumbai|delhi|chennai|kolkata|pakistan|bangladesh|sri lanka|nepal|bhutan|united kingdom|uk|england|scotland|wales|ireland|london|canada|ontario|toronto|vancouver|quebec|montreal|alberta|calgary|mexico|france|paris|germany|berlin|spain|madrid|italy|rome|australia|sydney|melbourne|new zealand|japan|tokyo|china|beijing|shanghai|hong kong|singapore|malaysia|uae|dubai|saudi|qatar|brazil|argentina|russia|europe|asia|africa)\b/i;
+  if (nonUsCountryRegex.test(addr)) {
+    return false;
+  }
+
+  // 2. Strict Coordinates Check across all 50 US States, DC, and US territories
+  if (typeof lat === "number" && typeof lng === "number" && !isNaN(lat) && !isNaN(lng)) {
+    // Contiguous Lower 48 States & DC
+    const inLower48 = lat >= 24.39 && lat <= 49.38 && lng >= -125.0 && lng <= -66.93;
+    // Alaska
+    const inAlaska = lat >= 51.0 && lat <= 71.5 && lng >= -179.2 && lng <= -129.0;
+    // Hawaii
+    const inHawaii = lat >= 18.8 && lat <= 28.5 && lng >= -178.4 && lng <= -154.7;
+    // Puerto Rico & US Virgin Islands
+    const inPR = lat >= 17.7 && lat <= 18.6 && lng >= -67.4 && lng <= -64.5;
+
+    if (!inLower48 && !inAlaska && !inHawaii && !inPR) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function triggerUsaBlockageModal(searchedLocation = "") {
+  stopOrbit();
+
+  // Immediately hide any background loading indicators or preflight screens
+  const loadingPill = document.getElementById("pipeline-loading-pill");
+  if (loadingPill) loadingPill.classList.add("hidden");
+
+  const preflightCard = document.getElementById("preflight-calc-card");
+  if (preflightCard) preflightCard.classList.add("hidden");
+
+  document.body.classList.remove("calculating-mode");
+
+  const addrEl = document.getElementById("usa-blockage-addr");
+  if (addrEl) addrEl.textContent = searchedLocation || "International Location";
+
+  const modal = document.getElementById("usa-blockage-modal");
+  if (modal) modal.classList.remove("hidden");
+
+  showAddressNotFoundMessage(
+    `🛑 USA COMMERCIAL PROPERTIES ONLY: "${searchedLocation || "This location"}" is outside the United States. International locations are blocked.`
+  );
+}
+
+function hideUsaBlockageModal() {
+  const modal = document.getElementById("usa-blockage-modal");
+  if (modal) modal.classList.add("hidden");
+
+  const input = document.getElementById("address-input");
+  if (input) {
+    input.value = "";
+    input.focus();
+  }
+}
+
 function isPointInsidePolygon(lng, lat, ring) {
   if (!Array.isArray(ring) || ring.length < 3) return false;
   let inside = false;
@@ -2386,6 +2452,9 @@ async function resolveExactAddressZeroCostFirst(rawQuery, placeId = null) {
           placeId: top.place_id || placeId,
           source: "Google Maps Rooftop"
         };
+        if (!isWithinUSA(result.lat, result.lng, result.formattedAddress)) {
+          return null;
+        }
         writePersistentGeocodeCache(normKey, result);
         writePersistentGeocodeCache(`q:${result.formattedAddress}`, result);
         return result;
@@ -2432,13 +2501,13 @@ async function resolveExactAddressZeroCostFirst(rawQuery, placeId = null) {
     fetch(
       `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?SingleLine=${encodeURIComponent(
         rawQuery
-      )}&maxLocations=3&outFields=Match_addr,Addr_type,StAddr,City,RegionAbbr&f=json`
+      )}&sourceCountry=USA&maxLocations=3&outFields=Match_addr,Addr_type,StAddr,City,RegionAbbr,Country&f=json`
     )
       .then((r) => r.json())
       .then((arcJson) => {
         const best = (arcJson?.candidates || []).find((c) => (c.score || 0) >= 82 && c.location);
         if (!best) return null;
-        return {
+        const resCandidate = {
           lng: best.location.x,
           lat: best.location.y,
           formattedAddress: best.address || rawQuery,
@@ -2447,16 +2516,17 @@ async function resolveExactAddressZeroCostFirst(rawQuery, placeId = null) {
           score: best.score || 0,
           source: `ArcGIS ${best.attributes?.Addr_type || "Rooftop"} ($0 Free)`
         };
+        return isWithinUSA(resCandidate.lat, resCandidate.lng, resCandidate.formattedAddress) ? resCandidate : null;
       })
       .catch(() => null)
   ]);
 
   // Prefer exact house-number OSM building node OR ArcGIS `PointAddress` (100% free exact parcel rooftop!)
-  if (photonCandidate && photonCandidate.hasHouseNumber) {
+  if (photonCandidate && photonCandidate.hasHouseNumber && isWithinUSA(photonCandidate.lat, photonCandidate.lng, photonCandidate.formattedAddress)) {
     writePersistentGeocodeCache(normKey, photonCandidate);
     return photonCandidate;
   }
-  if (arcCandidate && (arcCandidate.addrType === "PointAddress" || arcCandidate.addrType === "Subaddress" || arcCandidate.score >= 93)) {
+  if (arcCandidate && (arcCandidate.addrType === "PointAddress" || arcCandidate.addrType === "Subaddress" || arcCandidate.score >= 93) && isWithinUSA(arcCandidate.lat, arcCandidate.lng, arcCandidate.formattedAddress)) {
     writePersistentGeocodeCache(normKey, arcCandidate);
     return arcCandidate;
   }
@@ -2464,7 +2534,7 @@ async function resolveExactAddressZeroCostFirst(rawQuery, placeId = null) {
   // 4. TIER-3: Official Google Maps Geocoding API (Only called when Free Tier 1 & 2 didn't have an exact PointAddress!)
   if (gKey) {
     try {
-      const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(rawQuery)}&key=${encodeURIComponent(gKey)}`;
+      const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(rawQuery)}&components=country:US&key=${encodeURIComponent(gKey)}`;
       const res = await fetch(geoUrl);
       const json = await res.json();
       if (json && json.status === "OK" && json.results?.[0]?.geometry?.location) {
@@ -2478,6 +2548,9 @@ async function resolveExactAddressZeroCostFirst(rawQuery, placeId = null) {
           placeId: top.place_id || null,
           source: "Google Maps Rooftop"
         };
+        if (!isWithinUSA(result.lat, result.lng, result.formattedAddress)) {
+          return null;
+        }
         writePersistentGeocodeCache(normKey, result);
         return result;
       }
@@ -2485,17 +2558,17 @@ async function resolveExactAddressZeroCostFirst(rawQuery, placeId = null) {
   }
 
   // 5. Final Free Fallbacks (Photon general match, ArcGIS general match, or Nominatim)
-  if (photonCandidate) {
+  if (photonCandidate && isWithinUSA(photonCandidate.lat, photonCandidate.lng, photonCandidate.formattedAddress)) {
     writePersistentGeocodeCache(normKey, photonCandidate);
     return photonCandidate;
   }
-  if (arcCandidate) {
+  if (arcCandidate && isWithinUSA(arcCandidate.lat, arcCandidate.lng, arcCandidate.formattedAddress)) {
     writePersistentGeocodeCache(normKey, arcCandidate);
     return arcCandidate;
   }
   try {
     const nomRes = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(rawQuery)}&limit=1`
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(rawQuery)}&countrycodes=us&limit=1`
     );
     const nomJson = await nomRes.json();
     if (nomJson && nomJson.length > 0) {
@@ -2506,8 +2579,10 @@ async function resolveExactAddressZeroCostFirst(rawQuery, placeId = null) {
         routeName: null,
         source: "OpenStreetMap Nominatim ($0 Free)"
       };
-      writePersistentGeocodeCache(normKey, result);
-      return result;
+      if (isWithinUSA(result.lat, result.lng, result.formattedAddress)) {
+        writePersistentGeocodeCache(normKey, result);
+        return result;
+      }
     }
   } catch (_) {}
 
@@ -2598,6 +2673,12 @@ async function runLiveAddressPipeline(rawQuery, preLng = null, preLat = null, pr
       return;
     }
 
+    // USA Gatekeeper: Block international addresses immediately!
+    if (!isWithinUSA(preLat, preLng, preLabel || rawQuery)) {
+      triggerUsaBlockageModal(preLabel || rawQuery);
+      return;
+    }
+
     // Step 1: Verify / Geocode the exact address using Zero-Cost Rooftop Consensus FIRST (+ Google Maps fallback & persistent $0 cache)
     let lng = preLng;
     let lat = preLat;
@@ -2627,8 +2708,14 @@ async function runLiveAddressPipeline(rawQuery, preLng = null, preLat = null, pr
 
     // If no valid address was found, show inline error ("Couldn't find — type a new one") without opening broken maps!
     if (lng === null || lat === null || isNaN(lng) || isNaN(lat)) {
-      showAddressNotFoundMessage(`⚠️ Couldn't find "${rawQuery}" — please type a new address.`);
+      showAddressNotFoundMessage(`⚠️ Couldn't find "${rawQuery}" — please type a valid US commercial property address.`);
       if (loadingPill) loadingPill.classList.add("hidden");
+      return;
+    }
+
+    // USA Gatekeeper Validation: Verify resolved address and coordinates are strictly within the USA
+    if (!isWithinUSA(lat, lng, formattedAddress)) {
+      triggerUsaBlockageModal(formattedAddress || rawQuery);
       return;
     }
 
@@ -4497,6 +4584,23 @@ function bindUIControls() {
     if (e.target === modal) modal.classList.remove("open");
   });
 
+  // 11B. USA Commercial Location Gatekeeper Modal
+  const usaModal = document.getElementById("usa-blockage-modal");
+  const btnCloseUsa = document.getElementById("btn-close-usa-blockage");
+  if (btnCloseUsa) {
+    btnCloseUsa.addEventListener("click", hideUsaBlockageModal);
+  }
+  if (usaModal) {
+    usaModal.addEventListener("click", (e) => {
+      if (e.target === usaModal) hideUsaBlockageModal();
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      hideUsaBlockageModal();
+    }
+  });
+
   // 12. Live Address Search Form + Instant Clickable Autocomplete Suggestions
   setupAddressAutocomplete();
 
@@ -5070,10 +5174,10 @@ function setupAddressAutocomplete() {
 
     const myFetchId = ++activeFetchId;
     try {
-      // 2. Query 100% Free Rooftop Geocoders FIRST (Photon OSM Building Nodes + ArcGIS PointAddress Parcels)
+      // 2. Query 100% Free Rooftop Geocoders FIRST (Photon OSM Building Nodes + ArcGIS PointAddress Parcels — USA RESTRICTED)
       const arcUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?SingleLine=${encodeURIComponent(
         q
-      )}&maxLocations=6&outFields=Match_addr,Addr_type,StAddr,City,Region,RegionAbbr&f=json`;
+      )}&sourceCountry=USA&maxLocations=6&outFields=Match_addr,Addr_type,StAddr,City,Region,RegionAbbr,Country&f=json`;
       const arcPromise = fetch(arcUrl)
         .then((r) => r.json())
         .catch(() => null);
@@ -5096,6 +5200,7 @@ function setupAddressAutocomplete() {
               },
               body: JSON.stringify({
                 input: q,
+                includedRegionCodes: ["us"],
                 locationBias: {
                   circle: {
                     center: { latitude: 38.9784, longitude: -76.545 },
@@ -5114,13 +5219,15 @@ function setupAddressAutocomplete() {
       const combinedPool = [...COMMERCIAL_ADDRESS_CORPUS];
       const seenKeys = new Set(combinedPool.map((i) => i.label.toLowerCase()));
 
-      // Add 100% Free Photon (OpenStreetMap Rooftop Node Search — exact building coordinates included!)
+      // Add 100% Free Photon (OpenStreetMap Rooftop Node Search — filtered strictly to USA)
       (photonJson?.features || []).forEach((f) => {
         if (!f.geometry?.coordinates) return;
         const p = f.properties || {};
+        if (p.countrycode && p.countrycode.toUpperCase() !== "US") return;
         const streetPart = [p.housenumber, p.street].filter(Boolean).join(" ") || p.name;
         if (!streetPart) return;
         const addrLabel = [streetPart, p.city || p.locality, p.state || "MD", p.postcode].filter(Boolean).join(", ");
+        if (!isWithinUSA(f.geometry.coordinates[1], f.geometry.coordinates[0], addrLabel)) return;
         const key = addrLabel.toLowerCase();
         if (seenKeys.has(key)) return;
         seenKeys.add(key);
@@ -5134,10 +5241,11 @@ function setupAddressAutocomplete() {
         });
       });
 
-      // Add 100% Free ArcGIS PointAddress Parcel candidates (exact parcel coordinates included!)
+      // Add 100% Free ArcGIS PointAddress Parcel candidates (USA Only)
       (arcJson?.candidates || []).forEach((c) => {
         if ((c.score || 0) < 75 || !c.location) return;
         const addrLabel = c.address;
+        if (!isWithinUSA(c.location.y, c.location.x, addrLabel)) return;
         const key = addrLabel.toLowerCase();
         if (seenKeys.has(key)) return;
         seenKeys.add(key);
@@ -5155,11 +5263,12 @@ function setupAddressAutocomplete() {
         });
       });
 
-      // Add Official Google Maps Places Autocomplete predictions if queried
+      // Add Official Google Maps Places Autocomplete predictions (USA Only)
       (googleJson?.suggestions || []).forEach((s) => {
         const pred = s.placePrediction;
         if (!pred || !pred.text?.text) return;
         const addrLabel = pred.text.text.replace(/,\s*USA$/i, "").trim();
+        if (!isWithinUSA(null, null, addrLabel)) return;
         const key = addrLabel.toLowerCase();
         if (seenKeys.has(key)) return;
         seenKeys.add(key);

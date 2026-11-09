@@ -640,6 +640,37 @@
     </div>
   </div>
 
+  <!-- 7. USA LOCATION GATEKEEPER / BLOCKAGE MODAL -->
+  <div id="usa-blockage-modal" class="usa-blockage-backdrop hidden no-print">
+    <div class="usa-blockage-card">
+      <div class="usa-blockage-icon">🛑</div>
+      <div class="usa-blockage-badge">USA Commercial Properties Only</div>
+      <h2 id="usa-blockage-title">Location Outside USA Blocked</h2>
+      <p id="usa-blockage-msg">
+        The Hyatt Commercial OM Location Intelligence Engine is restricted exclusively to commercial real estate within the <strong>United States</strong>. International locations are strictly blocked.
+      </p>
+      <div class="usa-blockage-searched">
+        <span class="ub-label">Searched Location:</span>
+        <strong id="usa-blockage-addr">International Location</strong>
+      </div>
+      <div class="usa-blockage-reasons">
+        <div class="ub-reason-item">
+          <span class="ub-dot">🛑</span>
+          <div><strong>Strict Zero-Guessing Policy:</strong> Official property tax records (SDAT), state traffic monitoring counters (MDOT SHA), and commercial lease comps ($/SF) are calibrated strictly to US municipal and state infrastructure.</div>
+        </div>
+        <div class="ub-reason-item">
+          <span class="ub-dot">🛑</span>
+          <div><strong>Data Integrity Safeguard:</strong> Properties outside the United States lack verified US commercial comp records and are blocked to eliminate synthetic or inaccurate reporting.</div>
+        </div>
+      </div>
+      <div class="usa-blockage-actions">
+        <button type="button" id="btn-close-usa-blockage" class="btn-usa-blockage-primary">
+          🔍 Search a US Commercial Property Address
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="env-config.js" onerror="this.remove()"></script>
   <script src="app.js"></script>
 </body>
