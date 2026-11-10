@@ -23,7 +23,7 @@ const OLLAMA_BASE_URL = "http://127.0.0.1:11434";
 const RIVA_2661_DATASET = {
   address: "2661 Riva Road (Building 1000), Annapolis, MD 21401",
   title: "2661 Riva Road (Building 1000), Annapolis, MD 21401",
-  subRef: "5.04 ACRES • 51,447 SF CLASS A HEADQUARTERS • C3 ZONING",
+  subRef: "5.04 ACRES • 51,447 SF CLASS A HEADQUARTERS • C-2 ZONING",
   tableSourceTag: "Anne Arundel County GIS (Account 02-026-5990040549)",
   center: [-76.55940, 38.97430],
   specs: {
@@ -57,10 +57,9 @@ const RIVA_2661_DATASET = {
     [-76.56012, 38.97420],
     [-76.55898, 38.97486],
     [-76.55845, 38.97410],
-    [-76.55928, 38.97330],
-    [-76.56052, 38.97278],
-    [-76.56118, 38.97334],
-    [-76.56070, 38.97370],
+    [-76.55910, 38.97345],
+    [-76.56015, 38.97315],
+    [-76.56085, 38.97355],
     [-76.56012, 38.97420]
   ],
 
@@ -303,12 +302,12 @@ const RIVA_2661_DATASET = {
 
   accessPoints: [
     {
-      id: "acc-north-riro",
-      type: "riro",
+      id: "acc-north-curbcut",
+      type: "curbcut",
       icon: "↱",
-      mapPillText: "↱ Easy Right-In / Out",
-      title: "North Driveway — Right-In / Right-Out",
-      detail: "Easy turn lane right off southbound Riva Rd into the parking lot",
+      mapPillText: "↱ Permitted Full Turn Access",
+      title: "Primary Driveway — Full Ingress & Egress Curb Cut",
+      detail: "Designated turn lane & median break on Riva Road providing full directional access",
       coords: [-76.55988, 38.97428],
       offset: [0, -16]
     },
@@ -764,17 +763,17 @@ function getPrimarySubjectBuilding() {
   const bldgs = activeData?.condoBuildings || [];
   if (bldgs.length === 0) {
     return {
-      id: "Bldg 100",
-      name: activeData?.title?.split("—")[0]?.trim() || "Subject Building",
-      sqft: activeData?.specs?.rba || "24,500 SF",
-      estCost: activeData?.specs?.estLeaseCost || "$26/SF",
-      center: activeData?.center || [-76.55939, 38.97370],
+      id: "Building 1000",
+      name: activeData?.title?.split("—")[0]?.trim() || "Building 1000 — Primary Headquarters",
+      sqft: activeData?.specs?.rba || "51,447 SF",
+      estCost: activeData?.specs?.estLeaseCost || "$27/SF",
+      center: activeData?.center || [-76.55940, 38.97430],
       coords: activeData?.parcelPolygon || []
     };
   }
-  if (activeData.address && activeData.address.includes("2661") && bldgs.length >= 4) {
-    return bldgs[3];
-  }
+  // For 2661 Riva Road, always match Flagship Building 1000 (Hyatt Commercial Asset)
+  const bldg1000 = bldgs.find((b) => b.id === "Bldg 1000" || (b.name && b.name.includes("1000")));
+  if (bldg1000) return bldg1000;
   return bldgs[0];
 }
 
@@ -1622,7 +1621,7 @@ function updateMapGeometry(data) {
       estCost: b.estCost || "$25/SF Lease",
       rateFormula:
         b.rateFormula ||
-        "Formula: $23/SF Annapolis C3 Base + $2/SF Arterial Frontage & Build-Out = $25/SF",
+        "Formula: $23/SF Annapolis C-2 Base + $2/SF Arterial Frontage & Build-Out = $25/SF",
       estValue: b.estValue || "$2.85M ($255/SF)",
       stories: b.stories || 2,
       totalHeight: b.heightMeters || 12
@@ -2444,8 +2443,15 @@ function getActiveGoogleApiKey() {
 /* ============================================================================
    PERSISTENT ZERO-COST GEOCODE & SPATIAL CACHE (100% Free Repeat Lookups)
    ============================================================================ */
-const GEOCODE_CACHE_STORAGE_KEY = "hyatt_exact_geocode_cache_v2";
+const GEOCODE_CACHE_STORAGE_KEY = "hyatt_exact_geocode_cache_v5";
 const AUTOCOMPLETE_MEMORY_CACHE = new Map();
+
+// Clear legacy stale cache versions from visitors' localStorage
+try {
+  ["hyatt_exact_geocode_cache_v1", "hyatt_exact_geocode_cache_v2", "hyatt_exact_geocode_cache_v3", "hyatt_exact_geocode_cache_v4"].forEach((k) =>
+    localStorage.removeItem(k)
+  );
+} catch (_) {}
 
 function readPersistentGeocodeCache(cacheKey) {
   if (!cacheKey) return null;
@@ -2453,7 +2459,16 @@ function readPersistentGeocodeCache(cacheKey) {
     const raw = localStorage.getItem(GEOCODE_CACHE_STORAGE_KEY);
     if (!raw) return null;
     const mapObj = JSON.parse(raw);
-    return mapObj[cacheKey.toLowerCase().trim()] || null;
+    const item = mapObj[cacheKey.toLowerCase().trim()];
+    if (!item) return null;
+
+    // Strict house-number validation on all cached records: prevents "1750 Forest Dr" from ever loading "2323 Forest Dr"
+    const queryNum = (cacheKey.match(/\b\d+\b/) || [])[0];
+    const itemNum = (item.formattedAddress?.match(/\b\d+\b/) || item.label?.match(/\b\d+\b/) || [])[0];
+    if (queryNum && itemNum && queryNum !== itemNum) {
+      return null; // Mismatched house number — bypass corrupted cache!
+    }
+    return item;
   } catch (_) {
     return null;
   }
@@ -3040,7 +3055,7 @@ async function fetchLiveSpatialEnvironment(lat, lng, formattedAddress, googleRou
       : "No Data (Outside Submarket)";
 
     const rateFormula = isAnnapolisBuilding
-      ? `Formula: $${baseRate} Annapolis C3 Base + $${frontagePrem} Frontage + $${usePrem} ${capitalizeWords(bType)} Spec = $${totalRate}/SF (Hyatt Comps)`
+      ? `Formula: $${baseRate} Annapolis C-2 Base + $${frontagePrem} Frontage + $${usePrem} ${capitalizeWords(bType)} Spec = $${totalRate}/SF (Hyatt Comps)`
       : isMdBuilding
       ? `Formula: Maryland baseline estimate. Local submarket comp proof required.`
       : `Notice: Zero Guessing Policy. $24–$28/SF comp models cover Annapolis/MD only. This site is outside Maryland jurisdiction.`;
@@ -4294,7 +4309,13 @@ function drawCanvasPill(ctx, x, y, icon, title, subtitle = null, options = {}) {
   let drawX = x;
   if (anchor === "center") drawX = x - boxW / 2;
   else if (anchor === "right") drawX = x - boxW;
-  const drawY = y - boxH / 2;
+  let drawY = y - boxH / 2;
+
+  // Boundary safety clamping: guarantees that NO badge or label is ever clipped by canvas edges or header/footer bars!
+  const cW = ctx.canvas?.width || 1920;
+  const cH = ctx.canvas?.height || 1080;
+  drawX = Math.max(24, Math.min(cW - boxW - 24, drawX));
+  drawY = Math.max(86, Math.min(cH - 62 - boxH, drawY));
 
   // Box shadow & background
   ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
@@ -4421,8 +4442,8 @@ function generateAnnotatedAerialCanvas(targetW = 1920, targetH = 1080) {
       const pt = project(acc.coords);
       if (pt.x < -100 || pt.x > targetW + 100 || pt.y < -100 || pt.y > targetH + 100) return;
 
-      if (acc.type === "riro") {
-        drawCanvasPill(ctx, pt.x, pt.y - 20, "↱", "Permitted Ingress / Egress Curb Cut", acc.title, {
+      if (acc.type === "curbcut" || acc.type === "riro") {
+        drawCanvasPill(ctx, pt.x, pt.y - 20, "↱", "Permitted Full Ingress & Egress", acc.title, {
           bg: "rgba(6, 78, 59, 0.94)",
           border: "#34d399",
           textColor: "#ffffff",
@@ -4672,19 +4693,70 @@ function closeAnnotatedAerialModal() {
 }
 
 function downloadAnnotatedAerialPng() {
-  const canvas = currentAnnotatedAerialCanvas || generateAnnotatedAerialCanvas(2400, 1350);
-  if (!canvas) return;
+  const btn = document.getElementById("btn-download-aerial-png");
+  const origText = btn ? btn.innerHTML : "⬇️ Download High-Res PNG (1920×1080)";
+  if (btn) btn.innerHTML = "⏳ Preparing High-Res PNG...";
 
-  const link = document.createElement("a");
+  const canvas = currentAnnotatedAerialCanvas || generateAnnotatedAerialCanvas(2400, 1350);
+  if (!canvas) {
+    if (btn) btn.innerHTML = origText;
+    alert("Unable to generate PNG image. Please ensure the map is loaded.");
+    return;
+  }
+
   const cleanName = (activeData.title || activeData.address).replace(/[^a-zA-Z0-9]/g, "_").slice(0, 36);
-  link.download = `Hyatt_Annotated_Aerial_${cleanName}.png`;
-  link.href = canvas.toDataURL("image/png");
-  link.click();
+  const fileName = `Hyatt_Annotated_Aerial_${cleanName}.png`;
+
+  if (canvas.toBlob) {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        if (btn) btn.innerHTML = origText;
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.download = fileName;
+      link.href = url;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        link.remove();
+        URL.revokeObjectURL(url);
+        if (btn) {
+          btn.innerHTML = "✓ PNG Downloaded!";
+          setTimeout(() => (btn.innerHTML = origText), 1800);
+        }
+      }, 120);
+    }, "image/png");
+  } else {
+    const dataUrl = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = fileName;
+    link.href = dataUrl;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      link.remove();
+      if (btn) {
+        btn.innerHTML = "✓ PNG Downloaded!";
+        setTimeout(() => (btn.innerHTML = origText), 1800);
+      }
+    }, 120);
+  }
 }
 
 function downloadAnnotatedAerialPdf() {
+  const btn = document.getElementById("btn-download-aerial-pdf");
+  const origText = btn ? btn.innerHTML : "📄 Download Full-Page Aerial PDF";
+  if (btn) btn.innerHTML = "⏳ Building Aerial PDF...";
+
   const canvas = currentAnnotatedAerialCanvas || generateAnnotatedAerialCanvas(2400, 1350);
-  if (!canvas) return;
+  if (!canvas) {
+    if (btn) btn.innerHTML = origText;
+    return;
+  }
 
   try {
     const { jsPDF } = window.jspdf;
@@ -4763,8 +4835,13 @@ function downloadAnnotatedAerialPdf() {
 
     const cleanName = (activeData.title || activeData.address).replace(/[^a-zA-Z0-9]/g, "_").slice(0, 32);
     doc.save(`Hyatt_Annotated_Aerial_Site_Plan_${cleanName}.pdf`);
+    if (btn) {
+      btn.innerHTML = "✓ PDF Downloaded!";
+      setTimeout(() => (btn.innerHTML = origText), 1800);
+    }
   } catch (err) {
     console.error("PDF export error:", err);
+    if (btn) btn.innerHTML = origText;
   }
 }
 
